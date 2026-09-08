@@ -15,7 +15,7 @@ This beginner exercise teaches the workflow Team 2 will use for the capstone. It
 
 ## Before You Start
 
-Install [GitHub Desktop](https://desktop.github.com/) and a text editor such as Visual Studio Code. Sign into GitHub Desktop and accept Nathan's repository invitation.
+Install [GitHub Desktop](https://desktop.github.com/) and a text editor such as Visual Studio Code. Sign into GitHub Desktop and accept the repository invitation to this repo.
 
 > [!IMPORTANT]
 > This repository is public. Never add passwords, tokens, student ID numbers, private course materials, real financial information, or other sensitive information.
