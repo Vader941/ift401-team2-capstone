@@ -34,6 +34,8 @@ The stack is the team's current baseline and may be revised if a documented proj
 
 ## Collaboration Workflow
 
+New collaborators should begin with the **[First GitHub Collaboration Exercise](docs/first-github-collaboration-exercise.md)**.
+
 1. Synchronize your local copy of `main`.
 2. Create a short-lived branch for one task.
 3. Commit focused changes with a clear message.
@@ -41,7 +43,7 @@ The stack is the team's current baseline and may be revised if a documented proj
 5. Have another team member review the pull request.
 6. Merge only after review and required checks pass.
 
-Do not commit directly to `main` once branch protection is enabled. See [CONTRIBUTING.md](CONTRIBUTING.md) for naming conventions and the complete workflow.
+Do not commit directly to `main`. See [CONTRIBUTING.md](CONTRIBUTING.md) for naming conventions and the complete workflow.
 
 ## Local Setup
 
@@ -58,6 +60,7 @@ Never commit `.env`, credentials, API keys, database exports, or real user infor
 
 ## Documentation
 
+- [First GitHub collaboration exercise](docs/first-github-collaboration-exercise.md)
 - [Contribution guide](CONTRIBUTING.md)
 - [Security policy](SECURITY.md)
 - [Development setup](docs/development-setup.md)
