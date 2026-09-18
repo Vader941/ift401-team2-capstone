@@ -1,38 +1,111 @@
 # Development Setup
 
-This page will contain the authoritative setup procedure after the Django project is initialized.
-
 ## Prerequisites
 
-The expected local tools are:
+Install the following tools:
 
 - Git
-- A team-approved Python version
+- Python 3.12
 - A code editor such as Visual Studio Code
 - Access to the GitHub repository
 
-## Initial Clone
+## Clone the Repository
 
 ```bash
 git clone https://github.com/Vader941/ift401-team2-capstone.git
 cd ift401-team2-capstone
 ```
 
-## Planned Python Environment
+## Create the Python Environment
 
-The exact commands will be verified when `requirements.txt` is added. The intended workflow is to create a local virtual environment, activate it, install the pinned dependencies, and create a local `.env` file from `.env.example`.
+Create a virtual environment:
 
-Do not install project dependencies globally and do not commit the virtual environment.
+```bash
+python -m venv .venv
+```
 
-## Setup Verification
+Activate it in Git Bash on Windows:
 
-Once the Django project exists, this guide will include exact commands for:
+```bash
+source .venv/Scripts/activate
+```
 
-- Installing dependencies
-- Applying migrations
-- Creating optional development-only seed data
-- Running the development server
-- Running automated tests
-- Verifying required environment variables
+Activate it in PowerShell on Windows:
 
-Do not invent or rely on undocumented setup steps. If a required step is missing, update this guide as part of the same pull request that introduces the requirement.
+```powershell
+.venv\Scripts\Activate.ps1
+```
+
+Activate it on macOS or Linux:
+
+```bash
+source .venv/bin/activate
+```
+
+## Install Dependencies
+
+With the virtual environment active, run:
+
+```bash
+python -m pip install -r requirements.txt
+```
+
+## Configure Local Environment Variables
+
+Copy the example environment file:
+
+```bash
+cp .env.example .env
+```
+
+Replace the placeholder `DJANGO_SECRET_KEY` value in `.env` with a private local development key. Never commit `.env` or share its secret value.
+
+A key can be generated with:
+
+```bash
+python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
+```
+
+## Initialize the Local Database
+
+Apply the included database migrations:
+
+```bash
+python manage.py migrate
+```
+
+The local SQLite database is generated for each developer and is not committed.
+
+## Run the Application
+
+Start the development server:
+
+```bash
+python manage.py runserver
+```
+
+Open `http://127.0.0.1:8000/` in a browser.
+
+Stop the server with `Ctrl+C`.
+
+## Run Automated Checks
+
+Run Django's configuration checks:
+
+```bash
+python manage.py check
+```
+
+Run the automated test suite:
+
+```bash
+python manage.py test
+```
+
+Confirm that model changes include migrations:
+
+```bash
+python manage.py makemigrations --check
+```
+
+All three commands should pass before opening a pull request.
