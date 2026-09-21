@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+
+{% block title %}{{ stock.symbol }} | Mock Stock Trading System{% endblock %}
+
+{% block content %}
+<h1>{{ stock.symbol }}</h1>
+<h2 class="h4">{{ stock.company_name }}</h2>
+
+<dl>
+    <dt>Current Price</dt>
+    <dd>${{ stock.current_price }}</dd>
+
+    <dt>Status</dt>
+    <dd>
+        {% if stock.is_active %}
+            Active
+        {% else %}
+            Inactive
+        {% endif %}
+    </dd>
+</dl>
+
+<a href="{% url 'market:stock-list' %}">Back to stocks</a>
+{% endblock %}

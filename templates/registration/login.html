@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+
+{% block title %}Log In | Mock Stock Trading System{% endblock %}
+
+{% block content %}
+<h1>Log In</h1>
+
+{% if form.errors %}
+<div class="alert alert-danger" role="alert">
+    The username or password was incorrect. Please try again.
+</div>
+{% endif %}
+
+<form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button class="btn btn-primary" type="submit">Log In</button>
+</form>
+{% endblock %}

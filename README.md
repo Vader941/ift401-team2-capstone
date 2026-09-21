@@ -7,7 +7,13 @@ A team-developed stock trading simulation created for **IFT 401: Information Tec
 
 ## Project Status
 
-The team is currently completing requirements, system design, and development planning. Application code will be added after the initial architecture and setup decisions are confirmed.
+## Local Setup
+
+See the **[Development Setup Guide](docs/development-setup.md)** for complete environment, database, server, and testing instructions.
+
+The standard setup uses a local Python virtual environment, dependencies pinned in `requirements.txt`, environment variables copied from `.env.example`, and SQLite for local development.
+
+Never commit `.env`, credentials, API keys, database exports, or real user information.
 
 ## Planned Technology Stack
 
