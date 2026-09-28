@@ -3,17 +3,24 @@
 {% block title %}Stocks | Mock Stock Trading System{% endblock %}
 
 {% block content %}
-<h1>Available Stocks</h1>
+<section class="page-heading d-sm-flex justify-content-sm-between align-items-end gap-3">
+    <div>
+        <p class="eyebrow mb-2">Market</p>
+        <h1>Available Stocks</h1>
+        <p class="text-secondary mb-0">Browse active stocks in the simulation.</p>
+    </div>
+</section>
 
 {% if stocks %}
-<div class="table-responsive">
-    <table class="table">
+<div class="card content-card overflow-hidden">
+    <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
         <thead>
             <tr>
                 <th scope="col">Symbol</th>
                 <th scope="col">Company</th>
                 <th scope="col">Current Price</th>
-                <th scope="col"></th>
+                <th scope="col"><span class="visually-hidden">Actions</span></th>
             </tr>
         </thead>
         <tbody>
@@ -21,9 +28,9 @@
             <tr>
                 <td>{{ stock.symbol }}</td>
                 <td>{{ stock.company_name }}</td>
-                <td>${{ stock.current_price }}</td>
+                <td class="price-cell">${{ stock.current_price }}</td>
                 <td>
-                    <a href="{% url 'market:stock-detail' stock.pk %}">
+                    <a class="btn btn-outline-primary btn-sm" href="{% url 'market:stock-detail' stock.pk %}">
                         View
                     </a>
                 </td>
@@ -31,8 +38,12 @@
             {% endfor %}
         </tbody>
     </table>
+    </div>
 </div>
 {% else %}
-<p>No active stocks are currently available.</p>
+<section class="empty-state text-center" aria-labelledby="empty-stocks-heading">
+    <h2 id="empty-stocks-heading" class="h4">No active stocks are available</h2>
+    <p class="text-secondary mb-0">Please check back later for stocks available in the simulation.</p>
+</section>
 {% endif %}
 {% endblock %}

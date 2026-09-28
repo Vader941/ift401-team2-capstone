@@ -1,1 +1,93 @@
-/* Shared project styles will be developed with the interface templates. */
+:root {
+    --site-navy: #13213c;
+    --site-blue: #1d5fd1;
+    --site-blue-dark: #164ba7;
+    --site-bg: #f5f7fb;
+    --site-border: #dce3ee;
+    --site-text: #1d2939;
+}
+
+body {
+    background: var(--site-bg);
+    color: var(--site-text);
+}
+
+.site-container { max-width: 1120px; }
+
+.site-navbar { background: var(--site-navy); }
+
+.navbar-dark .navbar-nav .nav-link { color: rgba(255, 255, 255, .82); }
+.navbar-dark .navbar-nav .nav-link:hover,
+.navbar-dark .navbar-nav .nav-link:focus { color: #fff; }
+
+.site-footer { background: #eaf0f8; color: #526176; }
+
+.hero-panel {
+    background: linear-gradient(135deg, #e9f1ff, #fff);
+    border: 1px solid #d5e2fb;
+    border-radius: 1rem;
+    padding: clamp(2rem, 5vw, 4.5rem);
+}
+
+.hero-stat-card, .content-card, .detail-card, .form-card {
+    border: 1px solid var(--site-border);
+    border-radius: .85rem;
+}
+
+.hero-stat-card {
+    display: grid;
+    gap: .4rem;
+    background: #fff;
+    box-shadow: 0 .5rem 1.5rem rgba(19, 33, 60, .08);
+    padding: 1.5rem;
+}
+
+.hero-stat-label, .eyebrow {
+    color: var(--site-blue-dark);
+    font-size: .78rem;
+    font-weight: 700;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+}
+
+.page-heading { margin-bottom: 2rem; }
+.page-heading h1 { margin-bottom: .5rem; }
+
+.btn-primary { background-color: var(--site-blue); border-color: var(--site-blue); }
+.btn-primary:hover, .btn-primary:focus { background-color: var(--site-blue-dark); border-color: var(--site-blue-dark); }
+
+.content-card, .detail-card, .form-card { background: #fff; box-shadow: 0 .25rem 1rem rgba(19, 33, 60, .04); }
+.content-card .card-body, .detail-card .card-body { min-height: 100%; }
+
+.table > :not(caption) > * > * { padding: 1rem; }
+.table thead th { background: #edf3fc; color: #344054; white-space: nowrap; }
+.price-cell { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
+
+.empty-state {
+    background: #fff;
+    border: 1px dashed #b9c7db;
+    border-radius: .85rem;
+    padding: 3rem 1.5rem;
+}
+
+.back-link { color: var(--site-blue-dark); font-weight: 600; text-decoration: none; }
+.back-link:hover, .back-link:focus { text-decoration: underline; }
+
+.status-badge { font-size: .85rem; padding: .55rem .75rem; }
+.stock-data { display: grid; grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr)); gap: 1.25rem; }
+.stock-data div { background: #f6f8fc; border-radius: .6rem; padding: 1rem; }
+.stock-data dt { color: #526176; font-size: .85rem; font-weight: 600; }
+.stock-data dd { font-size: 1.3rem; font-weight: 700; margin: .25rem 0 0; }
+
+.form-card form p { margin-bottom: 1.25rem; }
+.form-card label { display: block; font-weight: 600; margin-bottom: .4rem; }
+.form-card input { border: 1px solid #98a7bc; border-radius: .375rem; display: block; padding: .5rem .75rem; width: 100%; }
+.form-card input:focus, .btn:focus, .nav-link:focus, .back-link:focus { box-shadow: 0 0 0 .25rem rgba(29, 95, 209, .25); outline: 0; }
+.form-card .helptext { color: #667085; display: block; font-size: .875rem; margin-top: .35rem; }
+
+@media (max-width: 575.98px) {
+    .site-container { padding-left: 1.15rem; padding-right: 1.15rem; }
+    .hero-panel { padding: 2rem 1.5rem; }
+    .display-5 { font-size: 2.25rem; }
+    .table > :not(caption) > * > * { padding: .85rem .75rem; }
+}
