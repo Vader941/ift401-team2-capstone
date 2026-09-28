@@ -3,22 +3,33 @@
 {% block title %}{{ stock.symbol }} | Mock Stock Trading System{% endblock %}
 
 {% block content %}
-<h1>{{ stock.symbol }}</h1>
-<h2 class="h4">{{ stock.company_name }}</h2>
+<a class="back-link" href="{% url 'market:stock-list' %}">&larr; Back to stocks</a>
 
-<dl>
-    <dt>Current Price</dt>
-    <dd>${{ stock.current_price }}</dd>
+<section class="card detail-card mt-3" aria-labelledby="stock-heading">
+    <div class="card-body p-4 p-md-5">
+        <p class="eyebrow mb-2">Stock detail</p>
+        <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+            <div>
+                <h1 id="stock-heading" class="display-6 mb-1">{{ stock.symbol }}</h1>
+                <p class="h4 text-secondary mb-0">{{ stock.company_name }}</p>
+            </div>
+            {% if stock.is_active %}
+                <span class="badge text-bg-success status-badge">Active</span>
+            {% else %}
+                <span class="badge text-bg-secondary status-badge">Inactive</span>
+            {% endif %}
+        </div>
 
-    <dt>Status</dt>
-    <dd>
-        {% if stock.is_active %}
-            Active
-        {% else %}
-            Inactive
-        {% endif %}
-    </dd>
-</dl>
-
-<a href="{% url 'market:stock-list' %}">Back to stocks</a>
+        <dl class="stock-data mb-0">
+            <div>
+                <dt>Current Price</dt>
+                <dd>${{ stock.current_price }}</dd>
+            </div>
+            <div>
+                <dt>Status</dt>
+                <dd>{% if stock.is_active %}Active{% else %}Inactive{% endif %}</dd>
+            </div>
+        </dl>
+    </div>
+</section>
 {% endblock %}

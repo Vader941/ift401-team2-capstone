@@ -3,7 +3,29 @@
 {% block title %}Dashboard | Mock Stock Trading System{% endblock %}
 
 {% block content %}
-<h1>Customer Dashboard</h1>
-<p>Welcome, {{ user.username }}.</p>
-<p>Portfolio and trading features will appear here as they are implemented.</p>
+<section class="page-heading">
+    <p class="eyebrow mb-2">Account overview</p>
+    <h1>Customer Dashboard</h1>
+    <p class="lead">Welcome, {{ user.username }}.</p>
+</section>
+
+<div class="row g-4">
+    <div class="col-lg-8">
+        <section class="card content-card h-100">
+            <div class="card-body p-4">
+                <h2 class="h4">Your simulator is ready</h2>
+                <p class="text-secondary mb-4">Portfolio and trading features will appear here as they are implemented. In the meantime, you can explore the stocks currently available in the market.</p>
+                <a class="btn btn-primary" href="{% url 'market:stock-list' %}">View Stocks</a>
+            </div>
+        </section>
+    </div>
+    <div class="col-lg-4">
+        <aside class="card content-card h-100">
+            <div class="card-body p-4">
+                <h2 class="h5">What’s next?</h2>
+                <p class="text-secondary mb-0">Future updates will add portfolio and trading tools to this dashboard.</p>
+            </div>
+        </aside>
+    </div>
+</div>
 {% endblock %}
