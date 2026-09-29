@@ -30,10 +30,18 @@ class Portfolio(models.Model):
     class Meta:
         constraints = [
             models.CheckConstraint(
+                condition=models.Q(cash_balance__gte=Decimal('0.00')),
+                name='cash_balance_not_negative',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(reserved_cash__gte=Decimal('0.00')),
+                name='reserved_cash_not_negative',
+            ),
+            models.CheckConstraint(
                 condition=models.Q(reserved_cash__lte=models.F('cash_balance')),
                 name='reserved_cash_not_exceed_cash_balance',
             ),
-        ]
+        ]    
 
     def __str__(self):
         return f"{self.user} portfolio (${self.cash_balance})"
