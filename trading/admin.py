@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Portfolio, Holding
+from .models import Portfolio, Holding, Order
 
 
 @admin.register(Portfolio)
@@ -14,5 +14,15 @@ class PortfolioAdmin(admin.ModelAdmin):
 class HoldingAdmin(admin.ModelAdmin):
     list_display = ('portfolio', 'stock', 'quantity', 'reserved_quantity', 'updated_at')
     list_filter = ('stock',)
+    search_fields = ('portfolio__user__username', 'stock__symbol')
+    readonly_fields = ('created_at', 'updated_at')
+
+@admin.register(Order)
+class OrderAdmin(admin.ModelAdmin):
+    list_display = (
+        'portfolio', 'stock', 'side', 'status', 'quantity',
+        'submission_price', 'execution_price', 'created_at',
+    )
+    list_filter = ('side', 'status', 'stock')
     search_fields = ('portfolio__user__username', 'stock__symbol')
     readonly_fields = ('created_at', 'updated_at')
