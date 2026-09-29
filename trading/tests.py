@@ -62,4 +62,47 @@ class PortfolioModelTests(TestCase):
         Portfolio.objects.create(user=self.user)
         with self.assertRaises(IntegrityError):
             with transaction.atomic():
-                Portfolio.objects.create(user=self.user)        
+                Portfolio.objects.create(user=self.user)  
+
+from market.models import Stock
+from .models import Holding
+
+
+class HoldingModelTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username='trader2', password='testpass123'
+        )
+        self.portfolio = Portfolio.objects.create(user=self.user)
+        self.stock = Stock.objects.create(
+            symbol='ABLE',
+            company_name='Able Test Company',
+            current_price=Decimal('100.00'),
+        )
+
+    def test_default_quantities(self):
+        holding = Holding.objects.create(portfolio=self.portfolio, stock=self.stock)
+        self.assertEqual(holding.quantity, 0)
+        self.assertEqual(holding.reserved_quantity, 0)
+
+    def test_duplicate_portfolio_stock_rejected(self):
+        Holding.objects.create(portfolio=self.portfolio, stock=self.stock)
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                Holding.objects.create(portfolio=self.portfolio, stock=self.stock)
+
+    def test_reserved_quantity_cannot_exceed_quantity(self):
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                Holding.objects.create(
+                    portfolio=self.portfolio,
+                    stock=self.stock,
+                    quantity=5,
+                    reserved_quantity=10,
+                )
+
+    def test_str_representation(self):
+        holding = Holding.objects.create(
+            portfolio=self.portfolio, stock=self.stock, quantity=10
+        )
+        self.assertIn(self.stock.symbol, str(holding))                      
