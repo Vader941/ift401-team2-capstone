@@ -1,6 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
+from django.core.exceptions import ValidationError
 
 
 class DashboardTests(TestCase):
@@ -105,4 +106,84 @@ class HoldingModelTests(TestCase):
         holding = Holding.objects.create(
             portfolio=self.portfolio, stock=self.stock, quantity=10
         )
-        self.assertIn(self.stock.symbol, str(holding))                      
+        self.assertIn(self.stock.symbol, str(holding))
+
+from .models import Order
+
+
+class OrderModelTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username='trader3', password='testpass123'
+        )
+        self.portfolio = Portfolio.objects.create(user=self.user)
+        self.stock = Stock.objects.create(
+            symbol='BIBB',
+            company_name='Bibb Test Company',
+            current_price=Decimal('50.00'),
+        )
+
+    def test_default_status_is_pending(self):
+        order = Order.objects.create(
+            portfolio=self.portfolio,
+            stock=self.stock,
+            side=Order.Side.BUY,
+            quantity=10,
+            submission_price=Decimal('50.00'),
+        )
+        self.assertEqual(order.status, Order.Status.PENDING)
+
+    def test_quantity_must_be_positive(self):
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                Order.objects.create(
+                    portfolio=self.portfolio,
+                    stock=self.stock,
+                    side=Order.Side.BUY,
+                    quantity=0,
+                    submission_price=Decimal('50.00'),
+                )
+
+    def test_invalid_side_rejected_by_full_clean(self):
+        order = Order(
+            portfolio=self.portfolio,
+            stock=self.stock,
+            side='HOLD',
+            quantity=5,
+            submission_price=Decimal('50.00'),
+        )
+        with self.assertRaises(ValidationError):
+            order.full_clean()
+
+    def test_submission_price_below_minimum_rejected(self):
+        order = Order(
+            portfolio=self.portfolio,
+            stock=self.stock,
+            side=Order.Side.BUY,
+            quantity=5,
+            submission_price=Decimal('0.00'),
+        )
+        with self.assertRaises(ValidationError):
+            order.full_clean()
+
+    def test_execution_fields_optional(self):
+        order = Order.objects.create(
+            portfolio=self.portfolio,
+            stock=self.stock,
+            side=Order.Side.SELL,
+            quantity=3,
+            submission_price=Decimal('50.00'),
+        )
+        self.assertIsNone(order.execution_price)
+        self.assertIsNone(order.executed_at)
+
+    def test_str_representation(self):
+        order = Order.objects.create(
+            portfolio=self.portfolio,
+            stock=self.stock,
+            side=Order.Side.BUY,
+            quantity=7,
+            submission_price=Decimal('50.00'),
+        )
+        self.assertIn(self.stock.symbol, str(order))
+        self.assertIn('BUY', str(order))                              

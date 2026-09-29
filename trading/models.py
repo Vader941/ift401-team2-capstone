@@ -76,3 +76,66 @@ class Holding(models.Model):
 
     def __str__(self):
         return f"{self.portfolio.user} holds {self.quantity} {self.stock.symbol}"
+
+class Order(models.Model):
+    class Side(models.TextChoices):
+        BUY = 'BUY', 'Buy'
+        SELL = 'SELL', 'Sell'
+
+    class Status(models.TextChoices):
+        PENDING = 'PENDING', 'Pending'
+        EXECUTED = 'EXECUTED', 'Executed'
+        CANCELLED = 'CANCELLED', 'Cancelled'
+
+    portfolio = models.ForeignKey(
+        Portfolio,
+        on_delete=models.CASCADE,
+        related_name='orders',
+    )
+    stock = models.ForeignKey(
+        'market.Stock',
+        on_delete=models.PROTECT,
+        related_name='orders',
+    )
+    side = models.CharField(max_length=4, choices=Side.choices)
+    status = models.CharField(
+        max_length=9,
+        choices=Status.choices,
+        default=Status.PENDING,
+    )
+    quantity = models.PositiveIntegerField()
+    submission_price = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal('0.01'))],
+    )
+    reserved_cash = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal('0.00'),
+        validators=[MinValueValidator(Decimal('0.00'))],
+    )
+    reserved_shares = models.PositiveIntegerField(default=0)
+    execution_price = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal('0.01'))],
+    )
+    executed_at = models.DateTimeField(null=True, blank=True)
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    cancellation_reason = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(quantity__gt=0),
+                name='order_quantity_positive',
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.side} {self.quantity} {self.stock.symbol} ({self.status})"
