@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Portfolio, Holding, Order
+from .models import Portfolio, Holding, Order, CashTransaction
 
 
 @admin.register(Portfolio)
@@ -26,3 +26,16 @@ class OrderAdmin(admin.ModelAdmin):
     list_filter = ('side', 'status', 'stock')
     search_fields = ('portfolio__user__username', 'stock__symbol')
     readonly_fields = ('created_at', 'updated_at')
+
+@admin.register(CashTransaction)
+class CashTransactionAdmin(admin.ModelAdmin):
+    list_display = (
+        'portfolio', 'transaction_type', 'amount', 'balance_after',
+        'order', 'created_at',
+    )
+    list_filter = ('transaction_type',)
+    search_fields = ('portfolio__user__username',)
+    readonly_fields = ('created_at',)
+
+    def has_change_permission(self, request, obj=None):
+        return False    
