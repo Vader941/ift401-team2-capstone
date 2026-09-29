@@ -186,4 +186,81 @@ class OrderModelTests(TestCase):
             submission_price=Decimal('50.00'),
         )
         self.assertIn(self.stock.symbol, str(order))
-        self.assertIn('BUY', str(order))                              
+        self.assertIn('BUY', str(order))        
+
+from .models import CashTransaction
+
+
+class CashTransactionModelTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username='trader4', password='testpass123'
+        )
+        self.portfolio = Portfolio.objects.create(user=self.user)
+
+    def test_deposit_without_order(self):
+        transaction_record = CashTransaction.objects.create(
+            portfolio=self.portfolio,
+            transaction_type=CashTransaction.TransactionType.DEPOSIT,
+            amount=Decimal('500.00'),
+            balance_after=Decimal('25500.00'),
+        )
+        self.assertIsNone(transaction_record.order)
+
+    def test_zero_amount_rejected(self):
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                CashTransaction.objects.create(
+                    portfolio=self.portfolio,
+                    transaction_type=CashTransaction.TransactionType.DEPOSIT,
+                    amount=Decimal('0.00'),
+                    balance_after=Decimal('25000.00'),
+                )
+
+    def test_negative_balance_after_rejected(self):
+        record = CashTransaction(
+            portfolio=self.portfolio,
+            transaction_type=CashTransaction.TransactionType.WITHDRAWAL,
+            amount=Decimal('-100.00'),
+            balance_after=Decimal('-1.00'),
+        )
+        with self.assertRaises(ValidationError):
+            record.full_clean()
+
+    def test_purchase_can_link_to_order(self):
+        stock = Stock.objects.create(
+            symbol='CASH', company_name='Cash Test Co', current_price=Decimal('20.00')
+        )
+        order = Order.objects.create(
+            portfolio=self.portfolio,
+            stock=stock,
+            side=Order.Side.BUY,
+            quantity=5,
+            submission_price=Decimal('20.00'),
+        )
+        record = CashTransaction.objects.create(
+            portfolio=self.portfolio,
+            order=order,
+            transaction_type=CashTransaction.TransactionType.PURCHASE,
+            amount=Decimal('-100.00'),
+            balance_after=Decimal('24900.00'),
+        )
+        self.assertEqual(record.order, order)
+
+    def test_reverse_relation_from_portfolio(self):
+        CashTransaction.objects.create(
+            portfolio=self.portfolio,
+            transaction_type=CashTransaction.TransactionType.INITIAL_BALANCE,
+            amount=Decimal('25000.00'),
+            balance_after=Decimal('25000.00'),
+        )
+        self.assertEqual(self.portfolio.cash_transactions.count(), 1)
+
+    def test_str_representation(self):
+        record = CashTransaction.objects.create(
+            portfolio=self.portfolio,
+            transaction_type=CashTransaction.TransactionType.DEPOSIT,
+            amount=Decimal('50.00'),
+            balance_after=Decimal('25050.00'),
+        )
+        self.assertIn('DEPOSIT', str(record))                              
