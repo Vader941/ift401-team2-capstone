@@ -135,8 +135,23 @@ class Order(models.Model):
                 condition=models.Q(quantity__gt=0),
                 name='order_quantity_positive',
             ),
+            models.CheckConstraint(
+                condition=models.Q(submission_price__gte=Decimal('0.01')),
+                name='order_submission_price_minimum',
+            ),
+            models.CheckConstraint(
+                condition=models.Q(reserved_cash__gte=Decimal('0.00')),
+                name='order_reserved_cash_not_negative',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(execution_price__isnull=True)
+                    | models.Q(execution_price__gte=Decimal('0.01'))
+                ),
+                name='order_execution_price_minimum',
+            ),
         ]
-
+    
     def __str__(self):
         return f"{self.side} {self.quantity} {self.stock.symbol} ({self.status})"
 
@@ -179,8 +194,26 @@ class CashTransaction(models.Model):
                 condition=~models.Q(amount=Decimal('0.00')),
                 name='cash_transaction_amount_not_zero',
             ),
+            models.CheckConstraint(
+                condition=models.Q(balance_after__gte=Decimal('0.00')),
+                name='cash_transaction_balance_after_not_negative',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        transaction_type__in=['INITIAL_BALANCE', 'DEPOSIT', 'SALE'],
+                        amount__gt=Decimal('0.00'),
+                    )
+                    | models.Q(
+                        transaction_type__in=['WITHDRAWAL', 'PURCHASE'],
+                        amount__lt=Decimal('0.00'),
+                    )
+                ),
+                name='cash_transaction_amount_sign_matches_type',
+            ),
         ]
         ordering = ['-created_at']
+        
 
     def __str__(self):
         return f"{self.portfolio.user} {self.transaction_type} {self.amount}"    
