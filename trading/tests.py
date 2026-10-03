@@ -2,6 +2,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 from django.core.exceptions import ValidationError
+from django.db.models import ProtectedError
 
 
 class DashboardTests(TestCase):
@@ -186,7 +187,75 @@ class OrderModelTests(TestCase):
             submission_price=Decimal('50.00'),
         )
         self.assertIn(self.stock.symbol, str(order))
-        self.assertIn('BUY', str(order))        
+        self.assertIn('BUY', str(order))   
+
+    def test_submission_price_below_minimum_rejected_by_db(self):
+            with self.assertRaises(IntegrityError):
+                with transaction.atomic():
+                    Order.objects.create(
+                        portfolio=self.portfolio,
+                        stock=self.stock,
+                        side=Order.Side.BUY,
+                        quantity=5,
+                        submission_price=Decimal('0.00'),
+                    )
+    
+    def test_negative_reserved_cash_rejected_by_db(self):
+            with self.assertRaises(IntegrityError):
+                with transaction.atomic():
+                    Order.objects.create(
+                        portfolio=self.portfolio,
+                        stock=self.stock,
+                        side=Order.Side.BUY,
+                        quantity=5,
+                        submission_price=Decimal('50.00'),
+                        reserved_cash=Decimal('-1.00'),
+                    )
+    
+    def test_execution_price_below_minimum_rejected_by_db(self):
+            with self.assertRaises(IntegrityError):
+                with transaction.atomic():
+                    Order.objects.create(
+                        portfolio=self.portfolio,
+                        stock=self.stock,
+                        side=Order.Side.BUY,
+                        quantity=5,
+                        submission_price=Decimal('50.00'),
+                        execution_price=Decimal('0.00'),
+                    )
+    
+    def test_invalid_status_rejected_by_full_clean(self):
+            order = Order(
+                portfolio=self.portfolio,
+                stock=self.stock,
+                side=Order.Side.BUY,
+                status='FILLED',
+                quantity=5,
+                submission_price=Decimal('50.00'),
+            )
+            with self.assertRaises(ValidationError):
+                order.full_clean()
+    
+    def test_reverse_relation_orders_from_portfolio(self):
+            Order.objects.create(
+                portfolio=self.portfolio,
+                stock=self.stock,
+                side=Order.Side.BUY,
+                quantity=5,
+                submission_price=Decimal('50.00'),
+            )
+            self.assertEqual(self.portfolio.orders.count(), 1)
+    
+    def test_stock_protected_from_deletion_when_referenced_by_order(self):
+            Order.objects.create(
+                portfolio=self.portfolio,
+                stock=self.stock,
+                side=Order.Side.BUY,
+                quantity=5,
+                submission_price=Decimal('50.00'),
+            )
+            with self.assertRaises(ProtectedError):
+                self.stock.delete()                                     
 
 from .models import CashTransaction
 
@@ -263,4 +332,6 @@ class CashTransactionModelTests(TestCase):
             amount=Decimal('50.00'),
             balance_after=Decimal('25050.00'),
         )
-        self.assertIn('DEPOSIT', str(record))                              
+        self.assertIn('DEPOSIT', str(record))      
+
+    
