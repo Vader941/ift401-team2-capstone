@@ -38,4 +38,7 @@ class CashTransactionAdmin(admin.ModelAdmin):
     readonly_fields = ('created_at',)
 
     def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
         return False    
