@@ -334,4 +334,53 @@ class CashTransactionModelTests(TestCase):
         )
         self.assertIn('DEPOSIT', str(record))      
 
+    def test_negative_balance_after_rejected_by_db(self):
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                CashTransaction.objects.create(
+                    portfolio=self.portfolio,
+                    transaction_type=CashTransaction.TransactionType.DEPOSIT,
+                    amount=Decimal('100.00'),
+                    balance_after=Decimal('-1.00'),
+                )
+
+    def test_deposit_with_negative_amount_rejected_by_db(self):
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                CashTransaction.objects.create(
+                    portfolio=self.portfolio,
+                    transaction_type=CashTransaction.TransactionType.DEPOSIT,
+                    amount=Decimal('-100.00'),
+                    balance_after=Decimal('24900.00'),
+                )
+
+    def test_withdrawal_with_positive_amount_rejected_by_db(self):
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                CashTransaction.objects.create(
+                    portfolio=self.portfolio,
+                    transaction_type=CashTransaction.TransactionType.WITHDRAWAL,
+                    amount=Decimal('100.00'),
+                    balance_after=Decimal('25100.00'),
+                )
+
+    def test_purchase_with_positive_amount_rejected_by_db(self):
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                CashTransaction.objects.create(
+                    portfolio=self.portfolio,
+                    transaction_type=CashTransaction.TransactionType.PURCHASE,
+                    amount=Decimal('100.00'),
+                    balance_after=Decimal('25100.00'),
+                )
+
+    def test_sale_with_negative_amount_rejected_by_db(self):
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                CashTransaction.objects.create(
+                    portfolio=self.portfolio,
+                    transaction_type=CashTransaction.TransactionType.SALE,
+                    amount=Decimal('-100.00'),
+                    balance_after=Decimal('24900.00'),
+                )
     
