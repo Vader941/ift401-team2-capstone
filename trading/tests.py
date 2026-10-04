@@ -266,6 +266,11 @@ class CashTransactionModelTests(TestCase):
             username='trader4', password='testpass123'
         )
         self.portfolio = Portfolio.objects.create(user=self.user)
+        self.stock = Stock.objects.create(
+            symbol='CASH2',
+            company_name='Cash Test Company Two',
+            current_price=Decimal('50.00'),
+        )
 
     def test_deposit_without_order(self):
         transaction_record = CashTransaction.objects.create(
@@ -383,4 +388,20 @@ class CashTransactionModelTests(TestCase):
                     amount=Decimal('-100.00'),
                     balance_after=Decimal('24900.00'),
                 )
-    
+    def test_order_protected_from_deletion_when_referenced_by_cash_transaction(self):
+        order = Order.objects.create(
+            portfolio=self.portfolio,
+            stock=self.stock,
+            side=Order.Side.BUY,
+            quantity=2,
+            submission_price=Decimal('50.00'),
+        )
+        CashTransaction.objects.create(
+            portfolio=self.portfolio,
+            order=order,
+            transaction_type=CashTransaction.TransactionType.PURCHASE,
+            amount=Decimal('-100.00'),
+            balance_after=Decimal('24900.00'),
+        )
+        with self.assertRaises(ProtectedError):
+            order.delete()
