@@ -6,6 +6,7 @@ from zoneinfo import ZoneInfo
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError
 from django.test import TestCase
+from django.urls import reverse
 
 from market.models import MarketException, Stock
 
@@ -200,3 +201,159 @@ class BuyOrderServiceTests(TestCase):
                 self.buy_at(self.open_time)
 
         self.assert_no_trade_changes()
+
+class BuyOrderViewTests(TestCase):
+    def setUp(self):
+        self.user = User.objects.create_user(username="viewbuyer")
+        self.portfolio = Portfolio.objects.create(
+            user=self.user,
+            cash_balance=Decimal("1000.00"),
+        )
+        self.stock = Stock.objects.create(
+            symbol="VIEW",
+            company_name="View Test Company",
+            current_price=Decimal("25.00"),
+        )
+        self.url = reverse("trading:buy", args=[self.stock.pk])
+        self.open_time = datetime(
+            2026, 10, 7, 12, 0, tzinfo=NEW_YORK
+        )
+        self.closed_time = datetime(
+            2026, 10, 7, 18, 0, tzinfo=NEW_YORK
+        )
+
+    def test_anonymous_post_requires_login_and_creates_no_order(self):
+        response = self.client.post(self.url, {"quantity": "4"})
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn(reverse("login"), response.url)
+        self.assertFalse(Order.objects.exists())
+
+    def test_get_displays_form_without_creating_order(self):
+        self.client.force_login(self.user)
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, "trading/buy.html")
+        self.assertContains(response, 'name="quantity"')
+        self.assertEqual(
+            response.context["available_cash"], Decimal("1000.00")
+        )
+        self.assertFalse(Order.objects.exists())
+
+    def test_open_market_post_executes_and_displays_confirmation(self):
+        self.client.force_login(self.user)
+
+        with patch(
+            "trading.services.timezone.now",
+            return_value=self.open_time,
+        ):
+            response = self.client.post(
+                self.url, {"quantity": "4"}, follow=True
+            )
+
+        self.assertRedirects(response, self.url)
+        self.assertContains(
+            response, "Bought 4 shares of VIEW for $100.00."
+        )
+        self.assertEqual(
+            Order.objects.get().status, Order.Status.EXECUTED
+        )
+        self.assertEqual(
+            response.context["cash_balance"], Decimal("900.00")
+        )
+
+        # Refreshing the result page must not repeat the purchase.
+        self.client.get(self.url)
+        self.assertEqual(Order.objects.count(), 1)
+
+    def test_closed_market_post_displays_pending_confirmation(self):
+        self.client.force_login(self.user)
+
+        with patch(
+            "trading.services.timezone.now",
+            return_value=self.closed_time,
+        ):
+            response = self.client.post(
+                self.url, {"quantity": "4"}, follow=True
+            )
+
+        self.assertContains(response, "The purchase has not executed.")
+        self.assertEqual(
+            Order.objects.get().status, Order.Status.PENDING
+        )
+        self.assertEqual(
+            response.context["cash_balance"], Decimal("1000.00")
+        )
+        self.assertEqual(
+            response.context["available_cash"], Decimal("900.00")
+        )
+        self.assertFalse(CashTransaction.objects.exists())
+
+    def test_invalid_quantity_preserves_input_and_creates_no_order(self):
+        self.client.force_login(self.user)
+
+        response = self.client.post(self.url, {"quantity": "1.5"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Enter a whole number of shares.")
+        self.assertEqual(
+            response.context["form"]["quantity"].value(), "1.5"
+        )
+        self.assertFalse(Order.objects.exists())
+
+    def test_insufficient_funds_displays_service_error(self):
+        self.client.force_login(self.user)
+
+        response = self.client.post(self.url, {"quantity": "41"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Insufficient available cash.")
+        self.assertFalse(Order.objects.exists())
+        self.portfolio.refresh_from_db()
+        self.assertEqual(
+            self.portfolio.cash_balance, Decimal("1000.00")
+        )
+
+    def test_account_without_portfolio_cannot_buy(self):
+        other_user = User.objects.create_user(username="noportfolio")
+        self.client.force_login(other_user)
+
+        response = self.client.post(self.url, {"quantity": "4"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response, "This account has no trading portfolio."
+        )
+        self.assertFalse(Order.objects.exists())
+
+    def test_inactive_stock_cannot_be_bought_by_direct_post(self):
+        self.stock.is_active = False
+        self.stock.save(update_fields=["is_active"])
+        self.client.force_login(self.user)
+
+        response = self.client.post(self.url, {"quantity": "4"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Order.objects.exists())
+        self.assertFalse(CashTransaction.objects.exists())
+
+    def test_missing_stock_returns_404(self):
+        missing_pk = self.stock.pk
+        self.stock.delete()
+        self.client.force_login(self.user)
+
+        response = self.client.get(
+            reverse("trading:buy", args=[missing_pk])
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_unsupported_method_is_rejected(self):
+        self.client.force_login(self.user)
+
+        response = self.client.put(self.url)
+
+        self.assertEqual(response.status_code, 405)
+        self.assertFalse(Order.objects.exists())
