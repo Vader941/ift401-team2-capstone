@@ -1,3 +1,4 @@
+import secrets
 from decimal import Decimal
 from unittest import mock
 
@@ -18,7 +19,14 @@ from .services import (
 )
 
 User = get_user_model()
-PASSWORD = "Str0ng-Test-Passw0rd!"
+
+
+def generated_password():
+    """Random password created at test time, so no credential is stored in the code."""
+    return secrets.token_urlsafe(16) + "Aa1"
+
+
+PASSWORD = generated_password()
 
 
 class AuthenticationPageTests(SimpleTestCase):
@@ -123,7 +131,7 @@ class RegistrationTests(TestCase):
         self.assertEqual(User.objects.count(), 1)
 
     def test_password_mismatch_creates_nothing(self):
-        response = self.client.post(self.url, registration_data(password2="Different-Pass1!"))
+        response = self.client.post(self.url, registration_data(password2=generated_password()))
         self.assertEqual(response.status_code, 200)
         self.assertTrue(response.context["form"].errors["password2"])
         self.assert_no_records()
