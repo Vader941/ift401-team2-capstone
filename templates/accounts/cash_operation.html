@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+
+{% block title %}{% if operation == "deposit" %}Deposit{% else %}Withdraw{% endif %} Cash | Mock Stock Trading System{% endblock %}
+
+{% comment %}
+Functional placeholder for the cash contract. Cat owns final styling.
+Context: operation ("deposit" | "withdraw"), form (field: amount),
+cash_balance, reserved_cash, available_cash, recent_transactions
+(CashTransaction rows: transaction_type, amount, balance_after, created_at).
+{% endcomment %}
+
+{% block content %}
+<h1>{% if operation == "deposit" %}Deposit Cash{% else %}Withdraw Cash{% endif %}</h1>
+
+{% for message in messages %}
+<div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags }}{% endif %}" role="alert">
+    {{ message }}
+</div>
+{% endfor %}
+
+<dl class="row">
+    <dt class="col-sm-3">Cash balance</dt><dd class="col-sm-9">${{ cash_balance|floatformat:"2g" }}</dd>
+    <dt class="col-sm-3">Reserved for pending buys</dt><dd class="col-sm-9">${{ reserved_cash|floatformat:"2g" }}</dd>
+    <dt class="col-sm-3">Available cash</dt><dd class="col-sm-9">${{ available_cash|floatformat:"2g" }}</dd>
+</dl>
+
+<ul class="nav nav-tabs mb-3">
+    <li class="nav-item">
+        <a class="nav-link{% if operation == 'deposit' %} active{% endif %}" href="{% url 'accounts:deposit' %}">Deposit</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link{% if operation == 'withdraw' %} active{% endif %}" href="{% url 'accounts:withdraw' %}">Withdraw</a>
+    </li>
+</ul>
+
+<form method="post" novalidate>
+    {% csrf_token %}
+    {% with field=form.amount %}
+    <div class="mb-3">
+        <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+        <input
+            class="form-control{% if field.errors %} is-invalid{% endif %}"
+            type="number" step="0.01" min="0.01"
+            name="{{ field.html_name }}" id="{{ field.id_for_label }}"
+            value="{{ field.value|default_if_none:'' }}"
+        >
+        {% for error in field.errors %}<div class="invalid-feedback">{{ error }}</div>{% endfor %}
+        <div class="form-text">{{ field.help_text }}</div>
+    </div>
+    {% endwith %}
+    <button class="btn btn-primary" type="submit">
+        {% if operation == "deposit" %}Deposit{% else %}Withdraw{% endif %}
+    </button>
+</form>
+
+<h2 class="h5 mt-4">Recent cash activity</h2>
+{% if recent_transactions %}
+<table class="table table-sm">
+    <thead><tr><th>Date</th><th>Type</th><th class="text-end">Amount</th><th class="text-end">Balance after</th></tr></thead>
+    <tbody>
+    {% for entry in recent_transactions %}
+        <tr>
+            <td>{{ entry.created_at|date:"M j, Y g:i A" }}</td>
+            <td>{{ entry.get_transaction_type_display }}</td>
+            <td class="text-end">{{ entry.amount|floatformat:"2g" }}</td>
+            <td class="text-end">{{ entry.balance_after|floatformat:"2g" }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p>No cash activity yet.</p>
+{% endif %}
+{% endblock %}
