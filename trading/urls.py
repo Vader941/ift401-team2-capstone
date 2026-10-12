@@ -6,4 +6,5 @@ app_name = "trading"
 
 urlpatterns = [
     path("dashboard/", views.dashboard, name="dashboard"),
+    path("stocks/<int:pk>/buy/", views.buy, name="buy"),
 ]

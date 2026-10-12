@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block title %}Buy {{ stock.symbol }} | Mock Stock Trading System{% endblock %}
+
+{% block content %}
+<a class="back-link" href="{% url 'market:stock-detail' stock.pk %}">
+    &larr; Back to {{ stock.symbol }}
+</a>
+
+{% for message in messages %}
+    <div class="alert alert-success mt-3" role="status">
+        {{ message }}
+    </div>
+{% endfor %}
+
+<section class="card mt-3">
+    <div class="card-body p-4">
+        <h1 class="h3">Buy {{ stock.symbol }}</h1>
+        <p>{{ stock.company_name }}</p>
+        <p>Current price: <strong>${{ stock.current_price|floatformat:2 }}</strong></p>
+
+        {% if portfolio %}
+            <dl>
+                <dt>Total cash</dt>
+                <dd>${{ cash_balance|floatformat:2 }}</dd>
+                <dt>Reserved cash</dt>
+                <dd>${{ reserved_cash|floatformat:2 }}</dd>
+                <dt>Available cash</dt>
+                <dd>${{ available_cash|floatformat:2 }}</dd>
+            </dl>
+        {% endif %}
+
+        {% if not stock.is_active %}
+            <p class="alert alert-warning">
+                This stock is not available for trading.
+            </p>
+        {% elif not portfolio %}
+            <p class="alert alert-warning">
+                This account has no trading portfolio.
+            </p>
+        {% else %}
+            {% if market_open %}
+                <p>The market is open. Your buy will execute immediately.</p>
+            {% else %}
+                <p>
+                    The market is closed. Your order will remain pending
+                    and reserve its estimated cost.
+                </p>
+            {% endif %}
+
+            <p class="text-secondary">
+                The price is checked again when you submit.
+            </p>
+
+            <form method="post" action="{% url 'trading:buy' stock.pk %}">
+                {% csrf_token %}
+                {{ form.as_p }}
+                <button class="btn btn-primary" type="submit">
+                    Submit buy order
+                </button>
+            </form>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}
