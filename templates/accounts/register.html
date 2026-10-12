@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block title %}Register | Mock Stock Trading System{% endblock %}
+
+{% comment %}
+Functional placeholder for the registration contract. Cat owns final styling.
+Context: form (CustomerRegistrationForm) with fields first_name, last_name,
+username, email, password1, password2. Non-field errors: form.non_field_errors.
+{% endcomment %}
+
+{% block content %}
+<h1>Create an Account</h1>
+<p>New customers start with $25,000.00 in simulated cash.</p>
+
+{% if form.non_field_errors %}
+<div class="alert alert-danger" role="alert">
+    {% for error in form.non_field_errors %}<div>{{ error }}</div>{% endfor %}
+</div>
+{% endif %}
+
+<form method="post" novalidate>
+    {% csrf_token %}
+    {% for field in form %}
+    <div class="mb-3">
+        <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+        <input
+            class="form-control{% if field.errors %} is-invalid{% endif %}"
+            type="{{ field.field.widget.input_type }}"
+            name="{{ field.html_name }}"
+            id="{{ field.id_for_label }}"
+            {% if field.field.widget.input_type != "password" and field.value %}value="{{ field.value }}"{% endif %}
+        >
+        {% for error in field.errors %}
+        <div class="invalid-feedback">{{ error }}</div>
+        {% endfor %}
+        {% if field.help_text and not field.errors %}
+        <div class="form-text">{{ field.help_text|safe }}</div>
+        {% endif %}
+    </div>
+    {% endfor %}
+    <button class="btn btn-primary" type="submit">Register</button>
+</form>
+
+<p class="mt-3">Already have an account? <a href="{% url 'login' %}">Log in</a></p>
+{% endblock %}
