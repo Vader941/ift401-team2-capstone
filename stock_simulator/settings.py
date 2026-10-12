@@ -33,6 +33,13 @@ DEBUG = os.getenv("DJANGO_DEBUG", "False").lower() in {
     "on",
 }
 
+# Hosted traffic passes through PythonAnywhere's HTTPS proxy.
+if os.getenv("DJANGO_HOSTED", "False").lower() == "true":
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    SECURE_SSL_REDIRECT = True
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+
 ALLOWED_HOSTS = [
     host.strip()
     for host in os.getenv("DJANGO_ALLOWED_HOSTS", "").split(",")
