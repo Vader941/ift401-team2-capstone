@@ -207,7 +207,6 @@ class BuyOrderServiceTests(TestCase):
                 self.buy_at(self.open_time)
 
         self.assert_no_trade_changes()
-        
     def test_pending_buy_protects_reserved_cash_from_withdrawal(self):
         order = self.buy_at(self.closed_time, quantity=36)
 
@@ -304,6 +303,34 @@ class BuyOrderServiceTests(TestCase):
                 ),
             ],
         )
+
+    def test_holding_quantity_limit_rolls_back_purchase(self):
+        holding = Holding.objects.create(
+            portfolio=self.portfolio,
+            stock=self.stock,
+            quantity=2_147_483_647,
+        )
+
+        with self.assertRaisesMessage(
+            BuyOrderError,
+            "This purchase would exceed the supported holding quantity.",
+        ):
+            self.buy_at(self.open_time, quantity=1)
+
+        self.portfolio.refresh_from_db()
+        holding.refresh_from_db()
+
+        self.assertEqual(
+            self.portfolio.cash_balance, Decimal("1000.00")
+        )
+        self.assertEqual(
+            self.portfolio.reserved_cash, Decimal("0.00")
+        )
+        self.assertEqual(holding.quantity, 2_147_483_647)
+        self.assertFalse(Order.objects.exists())
+        self.assertFalse(CashTransaction.objects.exists())
+
+
 class BuyOrderViewTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="viewbuyer")

@@ -3,13 +3,16 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_http_methods
 
+from accounts.services import available_cash
 from market.models import Stock
 from market.services import is_market_open
 
 from .forms import BuyOrderForm
 from .models import Order, Portfolio
 from .services import BuyOrderError, place_buy_order
-from accounts.services import available_cash
+
+
+
 
 @login_required
 def dashboard(request):
