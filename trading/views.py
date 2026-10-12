@@ -9,7 +9,7 @@ from market.services import is_market_open
 from .forms import BuyOrderForm
 from .models import Order, Portfolio
 from .services import BuyOrderError, place_buy_order
-
+from accounts.services import available_cash
 
 @login_required
 def dashboard(request):
@@ -74,8 +74,7 @@ def buy(request, pk):
                 portfolio.reserved_cash if portfolio else None
             ),
             "available_cash": (
-                portfolio.cash_balance - portfolio.reserved_cash
-                if portfolio else None
+                available_cash(portfolio) if portfolio else None
             ),
         },
     )

@@ -10,7 +10,7 @@ from market.models import Stock
 from market.services import is_market_open
 
 from .models import CashTransaction, Holding, Order, Portfolio
-
+from accounts.services import available_cash
 
 MAX_QUANTITY = 2_147_483_647
 
@@ -55,7 +55,7 @@ def place_buy_order(user, stock_id, quantity):
     # Read the current stored price while the Stock row is locked.
     price = stock.current_price
     cost = price * quantity
-    available = portfolio.cash_balance - portfolio.reserved_cash
+    available = available_cash(portfolio)
 
     if cost > available:
         raise BuyOrderError(

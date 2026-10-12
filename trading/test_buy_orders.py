@@ -13,6 +13,12 @@ from market.models import MarketException, Stock
 from .models import CashTransaction, Holding, Order, Portfolio
 from .services import BuyOrderError, place_buy_order
 
+from accounts.services import (
+    InsufficientFundsError,
+    available_cash,
+    deposit_cash,
+    withdraw_cash,
+)
 
 User = get_user_model()
 NEW_YORK = ZoneInfo("America/New_York")
@@ -201,7 +207,103 @@ class BuyOrderServiceTests(TestCase):
                 self.buy_at(self.open_time)
 
         self.assert_no_trade_changes()
+        
+    def test_pending_buy_protects_reserved_cash_from_withdrawal(self):
+        order = self.buy_at(self.closed_time, quantity=36)
 
+        # $900 reserved from the original $1,000 leaves $100 available.
+        with self.assertRaises(InsufficientFundsError):
+            withdraw_cash(self.user, Decimal("100.01"))
+
+        self.portfolio.refresh_from_db()
+        self.assertEqual(
+            self.portfolio.cash_balance, Decimal("1000.00")
+        )
+        self.assertEqual(
+            self.portfolio.reserved_cash, Decimal("900.00")
+        )
+        self.assertFalse(CashTransaction.objects.exists())
+
+        withdraw_cash(self.user, Decimal("100.00"))
+
+        self.portfolio.refresh_from_db()
+        order.refresh_from_db()
+        self.assertEqual(
+            self.portfolio.cash_balance, Decimal("900.00")
+        )
+        self.assertEqual(
+            self.portfolio.reserved_cash, Decimal("900.00")
+        )
+        self.assertEqual(
+            available_cash(self.portfolio), Decimal("0.00")
+        )
+        self.assertEqual(order.status, Order.Status.PENDING)
+        self.assertEqual(order.reserved_cash, Decimal("900.00"))
+
+        entry = CashTransaction.objects.get()
+        self.assertEqual(
+            entry.transaction_type,
+            CashTransaction.TransactionType.WITHDRAWAL,
+        )
+        self.assertEqual(entry.amount, Decimal("-100.00"))
+        self.assertEqual(entry.balance_after, Decimal("900.00"))
+        self.assertEqual(Order.objects.count(), 1)
+        self.assertFalse(Holding.objects.exists())
+
+    def test_deposit_funds_buy_without_spending_existing_reservation(self):
+        pending_order = self.buy_at(self.closed_time, quantity=36)
+        deposit_cash(self.user, Decimal("100.00"))
+
+        executed_order = self.buy_at(self.open_time, quantity=8)
+
+        self.portfolio.refresh_from_db()
+        pending_order.refresh_from_db()
+        self.assertEqual(
+            self.portfolio.cash_balance, Decimal("900.00")
+        )
+        self.assertEqual(
+            self.portfolio.reserved_cash, Decimal("900.00")
+        )
+        self.assertEqual(
+            available_cash(self.portfolio), Decimal("0.00")
+        )
+        self.assertEqual(
+            pending_order.status, Order.Status.PENDING
+        )
+        self.assertEqual(
+            pending_order.reserved_cash, Decimal("900.00")
+        )
+        self.assertEqual(
+            executed_order.status, Order.Status.EXECUTED
+        )
+        self.assertEqual(
+            Holding.objects.get(
+                portfolio=self.portfolio,
+                stock=self.stock,
+            ).quantity,
+            8,
+        )
+
+        entries = list(
+            CashTransaction.objects.order_by("pk").values_list(
+                "transaction_type", "amount", "balance_after"
+            )
+        )
+        self.assertEqual(
+            entries,
+            [
+                (
+                    CashTransaction.TransactionType.DEPOSIT,
+                    Decimal("100.00"),
+                    Decimal("1100.00"),
+                ),
+                (
+                    CashTransaction.TransactionType.PURCHASE,
+                    Decimal("-200.00"),
+                    Decimal("900.00"),
+                ),
+            ],
+        )
 class BuyOrderViewTests(TestCase):
     def setUp(self):
         self.user = User.objects.create_user(username="viewbuyer")
