@@ -32,12 +32,12 @@ jobs:
 
       - name: Check and test with SQLite
         env:
-          DJANGO_SECRET_KEY: github-actions-disposable-test-key
           DJANGO_DEBUG: "False"
           DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1,testserver
           DB_ENGINE: sqlite
           DJANGO_HOSTED: "False"
         run: |
+          export DJANGO_SECRET_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(64))')"
           python manage.py check
           python manage.py makemigrations --check --dry-run
           python manage.py test
