@@ -1,0 +1,108 @@
+name: Test and deploy to PythonAnywhere
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pythonanywhere-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out the merged code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test dependencies
+        run: pip install -r requirements.txt
+
+      - name: Check and test with SQLite
+        env:
+          DJANGO_DEBUG: "False"
+          DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1,testserver
+          DB_ENGINE: sqlite
+          DJANGO_HOSTED: "False"
+        run: |
+          export DJANGO_SECRET_KEY="$(python -c 'import secrets; print(secrets.token_urlsafe(64))')"
+          python manage.py check
+          python manage.py makemigrations --check --dry-run
+          python manage.py test
+
+      - name: Configure deployment SSH
+        env:
+          PA_SSH_PRIVATE_KEY: ${{ secrets.PA_SSH_PRIVATE_KEY }}
+          PA_SSH_KNOWN_HOSTS: ${{ secrets.PA_SSH_KNOWN_HOSTS }}
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$PA_SSH_PRIVATE_KEY" > ~/.ssh/pa_deploy
+          printf '%s\n' "$PA_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/pa_deploy ~/.ssh/known_hosts
+
+      - name: Update the hosted application
+        env:
+          DEPLOY_SHA: ${{ github.sha }}
+        run: |
+          ssh -i ~/.ssh/pa_deploy \
+            -o BatchMode=yes \
+            -o StrictHostKeyChecking=yes \
+            ablesoftwareweb@ssh.pythonanywhere.com \
+            "bash -s -- '$DEPLOY_SHA'" <<'REMOTE'
+          set -euo pipefail
+          cd /home/ablesoftwareweb/ift401-team2-capstone
+          source /home/ablesoftwareweb/.virtualenvs/capstone/bin/activate
+
+          test "$(git branch --show-current)" = "main"
+          test -z "$(git status --porcelain)"
+          git fetch origin main
+          git merge-base --is-ancestor "$1" origin/main
+
+          # Skip an older deployment if the server already has newer code.
+          if test "$(git rev-parse HEAD)" != "$1" &&
+             git merge-base --is-ancestor "$1" HEAD; then
+            echo "Server already contains this commit."
+            exit 0
+          fi
+
+          git merge --ff-only "$1"
+          pip install -r requirements-production.txt
+          python manage.py check
+          python manage.py migrate --noinput
+          python manage.py collectstatic --noinput
+          REMOTE
+
+      - name: Reload the web application
+        env:
+          PA_API_TOKEN: ${{ secrets.PA_API_TOKEN }}
+        run: |
+          curl --fail --silent --show-error \
+            --max-time 120 \
+            --request POST \
+            --header "Authorization: Token $PA_API_TOKEN" \
+            https://www.pythonanywhere.com/api/v0/user/ablesoftwareweb/webapps/ablesoftwareweb.pythonanywhere.com/reload/
+
+      - name: Verify the homepage responds
+        run: |
+          curl --fail --silent --show-error \
+            --location --retry 5 --retry-delay 5 \
+            --retry-all-errors --max-time 30 \
+            --output /dev/null \
+            https://ablesoftwareweb.pythonanywhere.com/
+
+      - name: Remove deployment key
+        if: always()
+        run: rm -f ~/.ssh/pa_deploy
