@@ -16,7 +16,34 @@ from .services import BuyOrderError, place_buy_order
 
 @login_required
 def dashboard(request):
-    return render(request, "trading/dashboard.html")
+    portfolio = Portfolio.objects.filter(user=request.user).first()
+    if portfolio is None:
+        holdings = []
+        recent_transactions = []
+        cash_balance = reserved_cash = available = None
+    else:
+        holdings = (
+            portfolio.holdings.filter(quantity__gt=0)
+            .select_related("stock")
+            .order_by("stock__symbol")
+        )
+        recent_transactions = portfolio.cash_transactions.all()[:10]
+        cash_balance = portfolio.cash_balance
+        reserved_cash = portfolio.reserved_cash
+        available = available_cash(portfolio)
+
+    return render(
+        request,
+        "trading/dashboard.html",
+        {
+            "portfolio": portfolio,
+            "cash_balance": cash_balance,
+            "reserved_cash": reserved_cash,
+            "available_cash": available,
+            "holdings": holdings,
+            "recent_transactions": recent_transactions,
+        },
+    )
 
 
 @login_required

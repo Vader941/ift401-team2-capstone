@@ -22,6 +22,12 @@
                     {{ form.as_p }}
                     <button class="btn btn-primary w-100 mt-2" type="submit">Log In</button>
                 </form>
+                {% url 'accounts:register' as register_url %}
+                {% if register_url %}
+                    <p class="text-center text-secondary mt-4 mb-0">
+                        New to the simulation? <a href="{{ register_url }}">Create an account</a>
+                    </p>
+                {% endif %}
             </div>
         </section>
     </div>

@@ -1,8 +1,13 @@
+from decimal import Decimal
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
 from django.core.exceptions import ValidationError
 from django.db.models import ProtectedError
+
+from market.models import Stock
+from .models import CashTransaction, Holding, Portfolio
 
 
 class DashboardTests(TestCase):
@@ -24,6 +29,73 @@ class DashboardTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "trading/dashboard.html")
         self.assertContains(response, "Welcome, testuser.")
+        self.assertIsNone(response.context["cash_balance"])
+        self.assertEqual(list(response.context["holdings"]), [])
+
+    def test_dashboard_shows_only_the_signed_in_users_portfolio_data(self):
+        user = get_user_model().objects.create_user(
+            username="portfolio-owner",
+            password="temporary-test-password",
+        )
+        other_user = get_user_model().objects.create_user(
+            username="other-owner",
+            password="temporary-test-password",
+        )
+        portfolio = Portfolio.objects.create(
+            user=user,
+            cash_balance=Decimal("1250.00"),
+            reserved_cash=Decimal("250.00"),
+        )
+        other_portfolio = Portfolio.objects.create(
+            user=other_user,
+            cash_balance=Decimal("9876.00"),
+        )
+        stock = Stock.objects.create(
+            symbol="CAT",
+            company_name="Cat Simulation Company",
+            current_price=Decimal("50.00"),
+        )
+        other_stock = Stock.objects.create(
+            symbol="OTHER",
+            company_name="Other Customer Company",
+            current_price=Decimal("40.00"),
+        )
+        own_holding = Holding.objects.create(
+            portfolio=portfolio,
+            stock=stock,
+            quantity=4,
+        )
+        Holding.objects.create(
+            portfolio=other_portfolio,
+            stock=other_stock,
+            quantity=9,
+        )
+        own_activity = CashTransaction.objects.create(
+            portfolio=portfolio,
+            transaction_type=CashTransaction.TransactionType.DEPOSIT,
+            amount=Decimal("100.00"),
+            balance_after=Decimal("1250.00"),
+        )
+        CashTransaction.objects.create(
+            portfolio=other_portfolio,
+            transaction_type=CashTransaction.TransactionType.DEPOSIT,
+            amount=Decimal("500.00"),
+            balance_after=Decimal("9876.00"),
+        )
+
+        self.client.force_login(user)
+        response = self.client.get(reverse("trading:dashboard"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["cash_balance"], Decimal("1250.00"))
+        self.assertEqual(response.context["reserved_cash"], Decimal("250.00"))
+        self.assertEqual(response.context["available_cash"], Decimal("1000.00"))
+        self.assertEqual(list(response.context["holdings"]), [own_holding])
+        self.assertEqual(list(response.context["recent_transactions"]), [own_activity])
+        self.assertContains(response, "CAT")
+        self.assertContains(response, "1,000.00")
+        self.assertNotContains(response, "OTHER")
+        self.assertNotContains(response, "9,876.00")
 
 from decimal import Decimal
 from django.db import IntegrityError, transaction

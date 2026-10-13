@@ -79,6 +79,12 @@ body {
 .stock-data dt { color: #526176; font-size: .85rem; font-weight: 600; }
 .stock-data dd { font-size: 1.3rem; font-weight: 700; margin: .25rem 0 0; }
 
+.balance-list { display: grid; gap: .75rem; }
+.balance-list div { align-items: baseline; border-bottom: 1px solid var(--site-border); display: flex; gap: 1rem; justify-content: space-between; padding-bottom: .75rem; }
+.balance-list div:last-child { border-bottom: 0; padding-bottom: 0; }
+.balance-list dt { color: #526176; font-weight: 600; }
+.balance-list dd { font-size: 1.2rem; font-variant-numeric: tabular-nums; font-weight: 700; margin: 0; white-space: nowrap; }
+
 .form-card form p { margin-bottom: 1.25rem; }
 .form-card label { display: block; font-weight: 600; margin-bottom: .4rem; }
 .form-card input { border: 1px solid #98a7bc; border-radius: .375rem; display: block; padding: .5rem .75rem; width: 100%; }
