@@ -3,61 +3,65 @@
 {% block title %}Buy {{ stock.symbol }} | Mock Stock Trading System{% endblock %}
 
 {% block content %}
-<a class="back-link" href="{% url 'market:stock-detail' stock.pk %}">
-    &larr; Back to {{ stock.symbol }}
-</a>
+<a class="back-link" href="{% url 'market:stock-detail' stock.pk %}">&larr; Back to {{ stock.symbol }}</a>
 
-{% for message in messages %}
-    <div class="alert alert-success mt-3" role="status">
-        {{ message }}
-    </div>
-{% endfor %}
-
-<section class="card mt-3">
-    <div class="card-body p-4">
-        <h1 class="h3">Buy {{ stock.symbol }}</h1>
-        <p>{{ stock.company_name }}</p>
-        <p>Current price: <strong>${{ stock.current_price|floatformat:2 }}</strong></p>
+<section class="card form-card mt-3" aria-labelledby="buy-heading">
+    <div class="card-body p-4 p-md-5">
+        <p class="eyebrow mb-2">Simulated trade</p>
+        <h1 id="buy-heading" class="h2">Buy {{ stock.symbol }}</h1>
+        <p class="h5 text-secondary">{{ stock.company_name }}</p>
+        <p>Current simulated price: <strong>${{ stock.current_price|floatformat:"2g" }} per share</strong></p>
 
         {% if portfolio %}
-            <dl>
-                <dt>Total cash</dt>
-                <dd>${{ cash_balance|floatformat:2 }}</dd>
-                <dt>Reserved cash</dt>
-                <dd>${{ reserved_cash|floatformat:2 }}</dd>
-                <dt>Available cash</dt>
-                <dd>${{ available_cash|floatformat:2 }}</dd>
+            <dl class="balance-list mb-4" aria-label="Simulated cash balances">
+                <div><dt>Cash balance</dt><dd>${{ cash_balance|floatformat:"2g" }}</dd></div>
+                <div><dt>Reserved cash</dt><dd>${{ reserved_cash|floatformat:"2g" }}</dd></div>
+                <div><dt>Available cash</dt><dd>${{ available_cash|floatformat:"2g" }}</dd></div>
             </dl>
         {% endif %}
 
         {% if not stock.is_active %}
-            <p class="alert alert-warning">
-                This stock is not available for trading.
-            </p>
+            <p class="alert alert-warning" role="status">This stock is not available for simulated trading.</p>
         {% elif not portfolio %}
-            <p class="alert alert-warning">
-                This account has no trading portfolio.
-            </p>
+            <p class="alert alert-warning" role="status">This account has no trading portfolio. A buy order cannot be submitted.</p>
         {% else %}
             {% if market_open %}
-                <p>The market is open. Your buy will execute immediately.</p>
+                <p class="alert alert-info" role="status">The market is open. An eligible buy order executes immediately.</p>
             {% else %}
-                <p>
-                    The market is closed. Your order will remain pending
-                    and reserve its estimated cost.
-                </p>
+                <p class="alert alert-info" role="status">The market is closed. An eligible order remains pending and reserves its estimated cost.</p>
             {% endif %}
+            <p class="text-secondary">The simulated price is checked again when you submit the order.</p>
 
-            <p class="text-secondary">
-                The price is checked again when you submit.
-            </p>
-
-            <form method="post" action="{% url 'trading:buy' stock.pk %}">
+            {% if form.non_field_errors %}
+                <div class="alert alert-danger" role="alert" tabindex="-1">
+                    {% for error in form.non_field_errors %}<div>{{ error }}</div>{% endfor %}
+                </div>
+            {% endif %}
+            <form method="post" action="{% url 'trading:buy' stock.pk %}" novalidate>
                 {% csrf_token %}
-                {{ form.as_p }}
-                <button class="btn btn-primary" type="submit">
-                    Submit buy order
-                </button>
+                {% with field=form.quantity %}
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                        <input
+                            class="form-control{% if field.errors %} is-invalid{% endif %}"
+                            type="number"
+                            name="{{ field.html_name }}"
+                            id="{{ field.id_for_label }}"
+                            min="{{ field.field.widget.attrs.min|default:'1' }}"
+                            step="{{ field.field.widget.attrs.step|default:'1' }}"
+                            {% if field.field.widget.attrs.max %}max="{{ field.field.widget.attrs.max }}"{% endif %}
+                            value="{{ field.value|default_if_none:'' }}"
+                            required
+                            {% if field.errors %}aria-invalid="true" aria-describedby="quantity-errors"{% endif %}
+                        >
+                        {% if field.errors %}
+                            <div id="quantity-errors" class="invalid-feedback d-block" role="alert">
+                                {% for error in field.errors %}<div>{{ error }}</div>{% endfor %}
+                            </div>
+                        {% endif %}
+                    </div>
+                {% endwith %}
+                <button class="btn btn-primary" type="submit">Submit buy order</button>
             </form>
         {% endif %}
     </div>

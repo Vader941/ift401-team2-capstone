@@ -12,6 +12,7 @@ from unittest.mock import patch
 
 from .services import is_market_open, update_stock_price
 from django.db.models import ProtectedError
+from trading.models import Portfolio
 
 from .models import Stock, MarketException, PriceHistory
 
@@ -55,6 +56,7 @@ class StockViewTests(TestCase):
             username="marketuser",
             password="temporary-test-password",
         )
+        Portfolio.objects.create(user=cls.user)
         cls.active_stock = Stock.objects.create(
             symbol="ABLE",
             company_name="Able Test Company",
@@ -82,6 +84,63 @@ class StockViewTests(TestCase):
         self.assertContains(response, "ABLE")
         self.assertNotContains(response, "Inactive Test Company")
 
+    def test_stock_list_search_matches_symbol_case_insensitively(self):
+        self.client.force_login(self.user)
+
+        response = self.client.get(
+            reverse("market:stock-list"), {"q": "abl"}
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertQuerySetEqual(
+            response.context["stocks"], [self.active_stock]
+        )
+        self.assertContains(response, 'value="abl"')
+
+    def test_stock_list_search_matches_company_name(self):
+        self.client.force_login(self.user)
+
+        response = self.client.get(
+            reverse("market:stock-list"), {"q": "test company"}
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertQuerySetEqual(
+            response.context["stocks"], [self.active_stock]
+        )
+
+    def test_stock_list_search_keeps_inactive_stocks_out_of_results(self):
+        self.client.force_login(self.user)
+
+        response = self.client.get(
+            reverse("market:stock-list"), {"q": "inactive"}
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(list(response.context["stocks"]), [])
+        self.assertContains(response, "No stocks match")
+        self.assertNotContains(response, "Inactive Test Company")
+
+    def test_stock_list_distinguishes_no_active_stocks_from_no_match(self):
+        self.client.force_login(self.user)
+        Stock.objects.filter(is_active=True).update(is_active=False)
+
+        response = self.client.get(reverse("market:stock-list"))
+
+        self.assertContains(response, "No active stocks are available")
+
+    def test_stock_detail_hides_inactive_stocks(self):
+        self.client.force_login(self.user)
+
+        response = self.client.get(
+            reverse(
+                "market:stock-detail",
+                kwargs={"pk": self.inactive_stock.pk},
+            )
+        )
+
+        self.assertEqual(response.status_code, 404)
+
     def test_stock_detail_displays_selected_stock(self):
         self.client.force_login(self.user)
 
@@ -95,6 +154,12 @@ class StockViewTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Able Test Company")
         self.assertContains(response, "$100.00")
+        self.assertContains(response, "Submit buy order")
+        self.assertContains(
+            response,
+            reverse("trading:buy", kwargs={"pk": self.active_stock.pk}),
+        )
+        self.assertContains(response, 'name="quantity"')
 
 class MarketExceptionModelTests(TestCase):
     def test_full_day_closure_is_valid(self):

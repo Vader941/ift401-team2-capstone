@@ -11,6 +11,26 @@
     </div>
 </section>
 
+<form class="stock-search-form my-4" method="get" action="{% url 'market:stock-list' %}" role="search">
+    <label class="form-label fw-semibold" for="stock-search">Search stocks</label>
+    <div class="d-flex flex-column flex-sm-row gap-2">
+        <input
+            class="form-control"
+            id="stock-search"
+            name="q"
+            type="search"
+            value="{{ search_query }}"
+            placeholder="Symbol or company name"
+            aria-describedby="stock-search-help"
+        >
+        <button class="btn btn-primary flex-shrink-0" type="submit">Search</button>
+        {% if search_query %}
+            <a class="btn btn-outline-secondary flex-shrink-0" href="{% url 'market:stock-list' %}">Clear</a>
+        {% endif %}
+    </div>
+    <div class="form-text" id="stock-search-help">Search by ticker symbol or company name.</div>
+</form>
+
 {% if stocks %}
 <div class="card content-card overflow-hidden">
     <div class="table-responsive">
@@ -42,8 +62,13 @@
 </div>
 {% else %}
 <section class="empty-state text-center" aria-labelledby="empty-stocks-heading">
-    <h2 id="empty-stocks-heading" class="h4">No active stocks are available</h2>
-    <p class="text-secondary mb-0">Please check back later for stocks available in the simulation.</p>
+    {% if search_query %}
+        <h2 id="empty-stocks-heading" class="h4">No stocks match “{{ search_query }}”</h2>
+        <p class="text-secondary mb-0">Try another symbol or company name.</p>
+    {% else %}
+        <h2 id="empty-stocks-heading" class="h4">No active stocks are available</h2>
+        <p class="text-secondary mb-0">Please check back later for stocks available in the simulation.</p>
+    {% endif %}
 </section>
 {% endif %}
 {% endblock %}
