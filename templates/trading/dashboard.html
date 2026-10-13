@@ -67,7 +67,11 @@
                                     {% for holding in holdings %}
                                         <tr>
                                             <td>
-                                                <a href="{% url 'market:stock-detail' holding.stock.pk %}">{{ holding.stock.symbol }}</a>
+                                                {% if holding.stock.is_active %}
+                                                    <a href="{% url 'market:stock-detail' holding.stock.pk %}">{{ holding.stock.symbol }}</a>
+                                                {% else %}
+                                                    <span>{{ holding.stock.symbol }} (inactive)</span>
+                                                {% endif %}
                                                 <span class="d-block small text-secondary">{{ holding.stock.company_name }}</span>
                                             </td>
                                             <td class="text-end">{{ holding.quantity }}</td>

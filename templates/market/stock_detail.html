@@ -34,7 +34,7 @@
         <section class="buy-entry mt-4 pt-4 border-top" aria-labelledby="buy-heading">
             <h2 id="buy-heading" class="h4">Buy this stock</h2>
             {% if portfolio %}
-                <p class="text-secondary">Enter a whole-share quantity. The buy page will confirm whether the order executes or remains pending based on market hours.</p>
+                <p class="text-secondary">Enter a whole-share quantity. Submitting places the order immediately: an eligible buy executes when the market is open or remains pending with cash reserved when the market is closed.</p>
                 <form method="post" action="{% url 'trading:buy' stock.pk %}" class="buy-entry-form">
                     {% csrf_token %}
                     {% with field=buy_form.quantity %}
