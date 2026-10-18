@@ -6,7 +6,7 @@ from trading.forms import BuyOrderForm
 from trading.models import Portfolio
 
 from .models import Stock
-
+from .services import update_stock_price
 
 class StockListView(LoginRequiredMixin, ListView):
     model = Stock
@@ -21,7 +21,12 @@ class StockListView(LoginRequiredMixin, ListView):
                 Q(symbol__icontains=self.search_query)
                 | Q(company_name__icontains=self.search_query)
             )
-        return queryset
+
+        stocks = list(queryset)
+        for stock in stocks:
+            update_stock_price(stock)
+            stock.refresh_from_db(fields=["current_price"])
+        return stocks
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -40,6 +45,9 @@ class StockDetailView(LoginRequiredMixin, DetailView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        stock = self.object
+        update_stock_price(stock)
+        stock.refresh_from_db(fields=["current_price"])
         portfolio = Portfolio.objects.filter(user=self.request.user).first()
         context["portfolio"] = portfolio
         if portfolio is not None:

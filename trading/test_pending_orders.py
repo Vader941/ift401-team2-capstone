@@ -20,6 +20,13 @@ from .services import (
 
 class PendingOrderServiceTests(TestCase):
     def setUp(self):
+        price_patch = patch(
+            "market.services.random.uniform",
+            return_value=0,
+        )
+        price_patch.start()
+        self.addCleanup(price_patch.stop)
+
         self.user = get_user_model().objects.create_user(
             username="pendingtrader"
         )
@@ -235,4 +242,37 @@ class PendingOrderServiceTests(TestCase):
         self.assertEqual(
             CashTransaction.objects.filter(order=order).count(),
             1,
+        )
+
+    def test_pending_buy_executes_at_generated_price(self):
+        Stock.objects.filter(pk=self.stock.pk).update(
+            current_price=Decimal("100.00")
+        )
+        order = self.submit_pending(quantity=4)
+
+        with patch(
+            "market.services.random.uniform",
+            return_value=1,
+        ):
+            self.process_at(self.open_time)
+
+        order.refresh_from_db()
+        self.portfolio.refresh_from_db()
+
+        self.assertEqual(order.status, Order.Status.EXECUTED)
+        self.assertEqual(
+            order.submission_price, Decimal("100.00")
+        )
+        self.assertEqual(
+            order.execution_price, Decimal("101.00")
+        )
+        self.assertEqual(
+            self.portfolio.cash_balance, Decimal("596.00")
+        )
+        self.assertEqual(
+            self.portfolio.reserved_cash, Decimal("0.00")
+        )
+        self.assertEqual(
+            CashTransaction.objects.get(order=order).amount,
+            Decimal("-404.00"),
         )

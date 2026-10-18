@@ -8,7 +8,7 @@ from django.utils import timezone
 
 from accounts.services import available_cash
 from market.models import Stock
-from market.services import is_market_open
+from market.services import is_market_open, update_stock_price
 
 from .models import CashTransaction, Holding, Order, Portfolio
 
@@ -59,6 +59,8 @@ def place_buy_order(user, stock_id, quantity):
         raise BuyOrderError("This stock is not available for trading.")
 
     # Read the current stored price while the Stock row is locked.
+    update_stock_price(stock)
+    stock.refresh_from_db(fields=["current_price"])
     price = stock.current_price
     cost = price * quantity
     available = available_cash(portfolio)
@@ -188,6 +190,8 @@ def place_sell_order(user, stock_id, quantity):
 
     submitted_at = timezone.now()
     market_open = is_market_open(submitted_at)
+    update_stock_price(stock)
+    stock.refresh_from_db(fields=["current_price"])
     price = stock.current_price
     proceeds = price * quantity
 
@@ -346,6 +350,10 @@ def process_pending_orders(user):
             portfolio=portfolio,
             stock=stock,
         ).first()
+
+        if stock.is_active:
+            update_stock_price(stock, at=evaluated_at)
+            stock.refresh_from_db(fields=["current_price"])
 
         execution_price = stock.current_price
         total = execution_price * order.quantity

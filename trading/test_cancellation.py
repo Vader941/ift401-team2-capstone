@@ -19,6 +19,13 @@ from .services import (
 
 class CancellationServiceTests(TestCase):
     def setUp(self):
+        price_patch = patch(
+            "market.services.random.uniform",
+            return_value=0,
+        )
+        price_patch.start()
+        self.addCleanup(price_patch.stop)
+
         self.user = get_user_model().objects.create_user(
             username="trader"
         )
