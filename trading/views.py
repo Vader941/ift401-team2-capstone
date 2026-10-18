@@ -9,13 +9,15 @@ from market.services import is_market_open
 
 from .forms import BuyOrderForm
 from .models import Order, Portfolio
-from .services import BuyOrderError, place_buy_order
+from .services import BuyOrderError, place_buy_order, process_pending_orders
 
 
 
 
 @login_required
 def dashboard(request):
+    process_pending_orders(request.user)
+
     portfolio = Portfolio.objects.filter(user=request.user).first()
     if portfolio is None:
         holdings = []
