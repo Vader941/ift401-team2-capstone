@@ -26,6 +26,13 @@ NEW_YORK = ZoneInfo("America/New_York")
 
 class BuyOrderServiceTests(TestCase):
     def setUp(self):
+        price_patch = patch(
+            "market.services.random.uniform",
+            return_value=0,
+        )
+        price_patch.start()
+        self.addCleanup(price_patch.stop)
+
         self.user = User.objects.create_user(username="buyer")
         self.portfolio = Portfolio.objects.create(
             user=self.user,
@@ -333,6 +340,13 @@ class BuyOrderServiceTests(TestCase):
 
 class BuyOrderViewTests(TestCase):
     def setUp(self):
+        price_patch = patch(
+            "market.services.random.uniform",
+            return_value=0,
+        )
+        price_patch.start()
+        self.addCleanup(price_patch.stop)
+
         self.user = User.objects.create_user(username="viewbuyer")
         self.portfolio = Portfolio.objects.create(
             user=self.user,
