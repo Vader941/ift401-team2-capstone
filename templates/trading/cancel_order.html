@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block title %}Cancel Order | Mock Stock Trading System{% endblock %}
+
+{% block content %}
+<a class="back-link" href="{% url 'trading:pending-orders' %}">&larr; Back to pending orders</a>
+
+<section class="card form-card mt-3" aria-labelledby="cancel-heading">
+    <div class="card-body p-4 p-md-5">
+        <p class="eyebrow mb-2">Order confirmation</p>
+        <h1 id="cancel-heading" class="h2">Cancel this pending order?</h1>
+        <p class="text-secondary">This keeps the order in your history and releases the shares or cash reserved for it.</p>
+        <dl class="balance-list mb-4">
+            <div><dt>Stock</dt><dd>{{ order.stock.symbol }} · {{ order.stock.company_name }}</dd></div>
+            <div><dt>Side</dt><dd>{{ order.get_side_display }}</dd></div>
+            <div><dt>Quantity</dt><dd>{{ order.quantity }} shares</dd></div>
+            <div><dt>Estimated value at submission</dt><dd>${{ order.estimated_value|floatformat:"2g" }}</dd></div>
+            <div><dt>Status</dt><dd>{{ order.get_status_display }}</dd></div>
+        </dl>
+        <form method="post" action="{% url 'trading:cancel-order' order.pk %}" class="d-flex flex-wrap gap-2">
+            {% csrf_token %}
+            <button class="btn btn-danger" type="submit">Confirm cancellation</button>
+            <a class="btn btn-outline-secondary" href="{% url 'trading:pending-orders' %}">Keep order</a>
+        </form>
+    </div>
+</section>
+{% endblock %}

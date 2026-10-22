@@ -9,7 +9,10 @@
         <h1>Customer Dashboard</h1>
         <p class="lead mb-0">Welcome, {{ user.username }}.</p>
     </div>
-    <a class="btn btn-primary mt-3 mt-sm-0" href="{% url 'market:stock-list' %}">Explore stocks</a>
+    <div class="d-flex flex-wrap gap-2 mt-3 mt-sm-0">
+        <a class="btn btn-outline-primary" href="{% url 'trading:pending-orders' %}">Pending orders</a>
+        <a class="btn btn-primary" href="{% url 'market:stock-list' %}">Explore stocks</a>
+    </div>
 </section>
 
 {% if portfolio %}
@@ -61,6 +64,7 @@
                                         <th scope="col">Stock</th>
                                         <th scope="col" class="text-end">Shares held</th>
                                         <th scope="col" class="text-end">Reserved</th>
+                                        <th scope="col" class="text-end"><span class="visually-hidden">Actions</span></th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -76,6 +80,13 @@
                                             </td>
                                             <td class="text-end">{{ holding.quantity }}</td>
                                             <td class="text-end">{{ holding.reserved_quantity }}</td>
+                                            <td class="text-end">
+                                                {% if holding.stock.is_active and holding.quantity > holding.reserved_quantity %}
+                                                    <a class="btn btn-outline-primary btn-sm" href="{% url 'trading:sell' holding.stock.pk %}">Sell</a>
+                                                {% else %}
+                                                    <span class="text-secondary small">Unavailable</span>
+                                                {% endif %}
+                                            </td>
                                         </tr>
                                     {% endfor %}
                                 </tbody>
