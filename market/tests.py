@@ -141,7 +141,8 @@ class StockViewTests(TestCase):
 
         self.assertEqual(response.status_code, 404)
 
-    def test_stock_detail_displays_selected_stock(self):
+@patch("market.services.random.uniform", return_value=0)
+def test_stock_detail_displays_selected_stock(self, _random):
         self.client.force_login(self.user)
 
         response = self.client.get(
