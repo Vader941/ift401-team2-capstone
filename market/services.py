@@ -51,8 +51,10 @@ def market_date_for(at=None):
 def record_daily_price(stock, price, at):
     """Fold an established price into the stock's statistics for that day.
 
-    The first price recorded on a market day becomes the opening price;
-    every recorded price, including the opening, updates the high and low.
+    The first price recorded on a market day becomes the opening price.
+    update_stock_price records the price in effect before its first change
+    of the day, so the opening reflects the start of trading. Every
+    recorded price, including the opening, updates the high and low.
     Call while the Stock row is locked. Returns the price.
     """
     daily, created = StockDailyStatistic.objects.get_or_create(
@@ -106,10 +108,14 @@ def update_stock_price(
     with transaction.atomic():
         locked_stock = Stock.objects.select_for_update().get(pk=stock.pk)
         previous_price = locked_stock.current_price
+        # The price in effect when the market day's first update is
+        # evaluated becomes that day's opening, so the daily change covers
+        # the full movement from the start of trading.
+        record_daily_price(locked_stock, previous_price, at)
         latest = locked_stock.price_history.first()
 
         if latest is not None and at - latest.effective_at < minimum_interval:
-            return record_daily_price(locked_stock, previous_price, at)
+            return previous_price
 
         proposed_change = Decimal(
             str(source(-max_change_percent, max_change_percent))
@@ -129,7 +135,7 @@ def update_stock_price(
         # A proposed change that rounds to the existing cent is not recorded
         # as a price change.
         if new_price == previous_price:
-            return record_daily_price(locked_stock, previous_price, at)
+            return previous_price
 
         actual_change = (
             (new_price - previous_price)
@@ -137,7 +143,7 @@ def update_stock_price(
             * Decimal("100")
         )
         if abs(actual_change) > max_change_percent:
-            return record_daily_price(locked_stock, previous_price, at)
+            return previous_price
 
         actual_change = actual_change.quantize(
             Decimal("0.0001"),
