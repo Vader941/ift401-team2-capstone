@@ -26,7 +26,7 @@ class MarketPriceIntegrationTests(TestCase):
             tzinfo=ZoneInfo("America/New_York"),
         )
 
-    def test_stock_list_updates_and_displays_price(self):
+    def assert_page_displays_stored_price(self, url):
         with (
             patch(
                 "market.services.timezone.now",
@@ -35,44 +35,30 @@ class MarketPriceIntegrationTests(TestCase):
             patch(
                 "market.services.random.uniform",
                 return_value=1,
-            ),
+            ) as random_source,
         ):
-            response = self.client.get(
-                reverse("market:stock-list")
-            )
+            response = self.client.get(url)
 
         self.stock.refresh_from_db()
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
-            self.stock.current_price, Decimal("101.00")
+            self.stock.current_price, Decimal("100.00")
         )
-        self.assertContains(response, "$101.00")
-        self.assertEqual(
-            PriceHistory.objects.filter(stock=self.stock).count(),
-            1,
+        self.assertContains(response, "$100.00")
+        self.assertFalse(
+            PriceHistory.objects.filter(stock=self.stock).exists()
+        )
+        random_source.assert_not_called()
+
+    def test_stock_list_displays_price_without_changing_it(self):
+        self.assert_page_displays_stored_price(
+            reverse("market:stock-list")
         )
 
-    def test_stock_detail_updates_and_displays_price(self):
-        with (
-            patch(
-                "market.services.timezone.now",
-                return_value=self.open_time,
-            ),
-            patch(
-                "market.services.random.uniform",
-                return_value=-1,
-            ),
-        ):
-            response = self.client.get(
-                reverse(
-                    "market:stock-detail",
-                    args=[self.stock.pk],
-                )
+    def test_stock_detail_displays_price_without_changing_it(self):
+        self.assert_page_displays_stored_price(
+            reverse(
+                "market:stock-detail",
+                args=[self.stock.pk],
             )
-
-        self.stock.refresh_from_db()
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(
-            self.stock.current_price, Decimal("99.00")
         )
-        self.assertContains(response, "$99.00")

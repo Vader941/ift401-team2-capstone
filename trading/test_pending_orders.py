@@ -9,6 +9,7 @@ from django.db import IntegrityError
 from django.urls import reverse
 
 from market.models import Stock
+from market.runner import run_market_cycle
 
 from .models import CashTransaction, Holding, Order, Portfolio
 from .services import (
@@ -212,7 +213,7 @@ class PendingOrderServiceTests(TestCase):
         self.assertEqual(self.holding.quantity, 10)
         self.assertFalse(CashTransaction.objects.exists())
 
-    def test_dashboard_executes_pending_order_and_shows_updated_cash(self):
+    def test_dashboard_displays_pending_order_without_executing_it(self):
         order = self.submit_pending()
         self.client.force_login(self.user)
 
@@ -229,36 +230,48 @@ class PendingOrderServiceTests(TestCase):
         order.refresh_from_db()
         self.holding.refresh_from_db()
 
-        self.assertEqual(order.status, Order.Status.EXECUTED)
-        self.assertEqual(self.holding.quantity, 14)
+        self.assertEqual(order.status, Order.Status.PENDING)
+        self.assertEqual(self.holding.quantity, 10)
         self.assertEqual(
             response.context["cash_balance"],
-            Decimal("900.00"),
+            Decimal("1000.00"),
         )
         self.assertEqual(
             response.context["reserved_cash"],
-            Decimal("0.00"),
+            Decimal("100.00"),
         )
-        self.assertEqual(
-            CashTransaction.objects.filter(order=order).count(),
-            1,
+        self.assertFalse(
+            CashTransaction.objects.filter(order=order).exists()
         )
 
-    def test_pending_buy_executes_at_generated_price(self):
+    def test_market_cycle_updates_price_then_executes_pending_buy(self):
         Stock.objects.filter(pk=self.stock.pk).update(
             current_price=Decimal("100.00")
         )
         order = self.submit_pending(quantity=4)
 
-        with patch(
-            "market.services.random.uniform",
-            return_value=1,
+        with (
+            patch(
+                "market.runner.timezone.now",
+                return_value=self.open_time,
+            ),
+            patch(
+                "market.services.random.uniform",
+                return_value=1,
+            ),
         ):
-            self.process_at(self.open_time)
+            result = run_market_cycle()
 
         order.refresh_from_db()
         self.portfolio.refresh_from_db()
+        self.stock.refresh_from_db()
 
+        self.assertEqual(result["prices_changed"], 1)
+        self.assertEqual(result["portfolios_processed"], 1)
+        self.assertEqual(result["portfolio_errors"], 0)
+        self.assertEqual(
+            self.stock.current_price, Decimal("101.00")
+        )
         self.assertEqual(order.status, Order.Status.EXECUTED)
         self.assertEqual(
             order.submission_price, Decimal("100.00")
