@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block title %}Pending Orders | Mock Stock Trading System{% endblock %}
+
+{% block content %}
+<section class="page-heading d-sm-flex justify-content-between align-items-end gap-3">
+    <div>
+        <p class="eyebrow mb-2">Simulated account</p>
+        <h1>Pending orders</h1>
+        <p class="text-secondary mb-0">Review orders waiting for the next eligible market session.</p>
+    </div>
+    <a class="btn btn-outline-primary mt-3 mt-sm-0" href="{% url 'trading:dashboard' %}">Back to dashboard</a>
+</section>
+
+{% if orders %}
+    <div class="card content-card overflow-hidden">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th scope="col">Created</th>
+                        <th scope="col">Stock</th>
+                        <th scope="col">Side</th>
+                        <th scope="col" class="text-end">Quantity</th>
+                        <th scope="col" class="text-end">Estimated value</th>
+                        <th scope="col">Status</th>
+                        <th scope="col"><span class="visually-hidden">Actions</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for order in orders %}
+                        <tr>
+                            <td class="text-nowrap"><time datetime="{{ order.created_at|date:'c' }}">{{ order.created_at|date:"M j, Y, g:i A" }}</time></td>
+                            <td>
+                                <strong>{{ order.stock.symbol }}</strong>
+                                <span class="d-block small text-secondary">{{ order.stock.company_name }}</span>
+                            </td>
+                            <td>{{ order.get_side_display }}</td>
+                            <td class="text-end">{{ order.quantity }}</td>
+                            <td class="text-end text-nowrap">${{ order.estimated_value|floatformat:"2g" }}<span class="d-block small text-secondary">At submission price</span></td>
+                            <td><span class="badge text-bg-warning">{{ order.get_status_display }}</span></td>
+                            <td class="text-nowrap"><a class="btn btn-outline-danger btn-sm" href="{% url 'trading:cancel-order' order.pk %}">Cancel</a></td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+{% else %}
+    <section class="empty-state text-center" aria-labelledby="pending-empty-heading">
+        <h2 id="pending-empty-heading" class="h4">No pending orders</h2>
+        <p class="text-secondary mb-3">Orders submitted while the market is closed will appear here.</p>
+        <a class="btn btn-primary" href="{% url 'market:stock-list' %}">Explore stocks</a>
+    </section>
+{% endif %}
+{% endblock %}
