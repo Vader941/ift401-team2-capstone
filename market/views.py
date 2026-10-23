@@ -3,7 +3,7 @@ from django.db.models import Q
 from django.views.generic import DetailView, ListView
 
 from trading.forms import BuyOrderForm
-from trading.models import Portfolio
+from trading.models import Holding, Portfolio
 
 from .models import Stock
 
@@ -45,4 +45,14 @@ class StockDetailView(LoginRequiredMixin, DetailView):
         context["portfolio"] = portfolio
         if portfolio is not None:
             context["buy_form"] = BuyOrderForm()
+            holding = Holding.objects.filter(
+                portfolio=portfolio,
+                stock=stock,
+            ).first()
+            context["holding"] = holding
+            context["available_shares"] = (
+                holding.quantity - holding.reserved_quantity
+                if holding is not None
+                else 0
+            )
         return context

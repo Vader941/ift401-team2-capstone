@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+
+{% block title %}Sell {{ stock.symbol }} | Mock Stock Trading System{% endblock %}
+
+{% block content %}
+<a class="back-link" href="{% url 'market:stock-detail' stock.pk %}">&larr; Back to {{ stock.symbol }}</a>
+
+<section class="card form-card mt-3" aria-labelledby="sell-heading">
+    <div class="card-body p-4 p-md-5">
+        <p class="eyebrow mb-2">Simulated trade</p>
+        <h1 id="sell-heading" class="h2">Sell {{ stock.symbol }}</h1>
+        <p class="h5 text-secondary">{{ stock.company_name }}</p>
+
+        <dl class="balance-list mb-4" aria-label="Share sale details">
+            <div><dt>Current simulated price</dt><dd>${{ stock.current_price|floatformat:"2g" }} per share</dd></div>
+            <div><dt>Available shares</dt><dd>{{ available_shares }}</dd></div>
+        </dl>
+
+        {% if not stock.is_active %}
+            <p class="alert alert-warning" role="status">This stock is not available for simulated trading.</p>
+        {% elif not portfolio %}
+            <p class="alert alert-warning" role="status">This account has no trading portfolio. A sell order cannot be submitted.</p>
+        {% elif available_shares < 1 %}
+            <p class="alert alert-warning" role="status">There are no available shares to sell. Shares reserved by pending orders cannot be sold again.</p>
+        {% else %}
+            {% if market_open %}
+                <p class="alert alert-info" role="status">The market is open. An eligible sale executes immediately.</p>
+            {% else %}
+                <p class="alert alert-info" role="status">The market is closed. An eligible sale remains pending and reserves shares until execution or cancellation.</p>
+            {% endif %}
+            <p class="text-secondary">The displayed total is an estimate from the current simulated price. The trading service checks the price and available shares again when you submit.</p>
+
+            {% if form.non_field_errors %}
+                <div class="alert alert-danger" role="alert" tabindex="-1">
+                    {% for error in form.non_field_errors %}<div>{{ error }}</div>{% endfor %}
+                </div>
+            {% endif %}
+            <form method="post" action="{% url 'trading:sell' stock.pk %}" novalidate>
+                {% csrf_token %}
+                {% with field=form.quantity %}
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                        <input
+                            class="form-control{% if field.errors %} is-invalid{% endif %}"
+                            type="number"
+                            name="{{ field.html_name }}"
+                            id="{{ field.id_for_label }}"
+                            min="1"
+                            max="{{ available_shares }}"
+                            step="1"
+                            value="{{ field.value|default_if_none:'' }}"
+                            required
+                            {% if field.errors %}aria-invalid="true" aria-describedby="quantity-errors"{% else %}aria-describedby="quantity-help sale-estimate"{% endif %}
+                        >
+                        {% if field.errors %}
+                            <div id="quantity-errors" class="invalid-feedback d-block" role="alert">
+                                {% for error in field.errors %}<div>{{ error }}</div>{% endfor %}
+                            </div>
+                        {% else %}
+                            <div class="form-text" id="quantity-help">Enter a positive whole-share quantity, up to the number currently available.</div>
+                        {% endif %}
+                    </div>
+                {% endwith %}
+                <p id="sale-estimate" class="sale-estimate" aria-live="polite">
+                    {% if estimated_value %}Estimated proceeds: <strong>${{ estimated_value|floatformat:"2g" }}</strong>{% else %}Estimated proceeds: enter a quantity.{% endif %}
+                </p>
+                <button class="btn btn-primary" type="submit">Submit sell order</button>
+            </form>
+            <script>
+                (() => {
+                    const quantity = document.getElementById("id_quantity");
+                    const estimate = document.getElementById("sale-estimate");
+                    const price = Number("{{ stock.current_price }}");
+                    const initialEstimate = "Estimated proceeds: ";
+                    const updateEstimate = () => {
+                        const shares = Number.parseInt(quantity.value, 10);
+                        if (!Number.isInteger(shares) || shares < 1) {
+                            estimate.textContent = initialEstimate + "enter a quantity.";
+                            return;
+                        }
+                        const total = (price * shares).toLocaleString(undefined, {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2
+                        });
+                        estimate.textContent = initialEstimate + "$" + total;
+                    };
+                    quantity.addEventListener("input", updateEstimate);
+                })();
+            </script>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

@@ -20,16 +20,55 @@
             {% endif %}
         </div>
 
+        {% with stats=stock.statistics %}
+        <h2 class="h4 mb-3">Simulated market statistics</h2>
         <dl class="stock-data mb-0">
             <div>
+                <dt>Initial Price</dt>
+                <dd>${{ stats.initial_price|floatformat:"2g" }}</dd>
+            </div>
+            <div>
                 <dt>Current Price</dt>
-                <dd>${{ stock.current_price }}</dd>
+                <dd>${{ stats.current_price|default:stock.current_price|floatformat:"2g" }}</dd>
+            </div>
+            <div>
+                <dt>Price Change</dt>
+                <dd>{% if stats.price_change < 0 %}-{% else %}+{% endif %}${{ stats.price_change|floatformat:"2g"|cut:"-" }}</dd>
+            </div>
+            <div>
+                <dt>Change Percent</dt>
+                <dd>{% if stats.price_change_percent >= 0 %}+{% endif %}{{ stats.price_change_percent|floatformat:"2g" }}%</dd>
+            </div>
+            <div>
+                <dt>Share Volume</dt>
+                <dd>{{ stats.share_volume|floatformat:"0g" }}</dd>
+            </div>
+            <div>
+                <dt>Market Capitalization</dt>
+                <dd>${{ stats.market_capitalization|floatformat:"2g" }}</dd>
+            </div>
+            <div>
+                <dt>Opening Price</dt>
+                <dd>${{ stats.opening_price|floatformat:"2g" }}</dd>
+            </div>
+            <div>
+                <dt>High Price</dt>
+                <dd>${{ stats.high_price|floatformat:"2g" }}</dd>
+            </div>
+            <div>
+                <dt>Low Price</dt>
+                <dd>${{ stats.low_price|floatformat:"2g" }}</dd>
+            </div>
+            <div>
+                <dt>Statistics Date</dt>
+                <dd>{% if stats.statistics_date %}{{ stats.statistics_date|date:"M j, Y" }}{% else %}Before first trading day{% endif %}</dd>
             </div>
             <div>
                 <dt>Status</dt>
                 <dd>{% if stock.is_active %}Active{% else %}Inactive{% endif %}</dd>
             </div>
         </dl>
+        {% endwith %}
 
         <section class="buy-entry mt-4 pt-4 border-top" aria-labelledby="buy-heading">
             <h2 id="buy-heading" class="h4">Buy this stock</h2>
@@ -61,6 +100,13 @@
                 <p class="text-secondary mb-0">This account has no trading portfolio, so a buy order cannot be submitted.</p>
             {% endif %}
         </section>
+
+        {% if portfolio and holding and holding.quantity > holding.reserved_quantity %}
+            <div class="mt-3">
+                <a class="btn btn-outline-primary" href="{% url 'trading:sell' stock.pk %}">Sell shares</a>
+                <span class="small text-secondary ms-2">Available shares: {{ available_shares }}</span>
+            </div>
+        {% endif %}
     </div>
 </section>
 {% endblock %}

@@ -18,3 +18,20 @@ class BuyOrderForm(forms.Form):
             attrs={"min": "1", "step": "1"}
         ),
     )
+
+
+class SellOrderForm(forms.Form):
+    quantity = forms.IntegerField(
+        label="Quantity",
+        min_value=1,
+        max_value=MAX_QUANTITY,
+        error_messages={
+            "required": "Enter the number of shares to sell.",
+            "invalid": "Enter a whole number of shares.",
+            "min_value": "Quantity must be at least 1 share.",
+            "max_value": "Quantity exceeds the supported limit.",
+        },
+        widget=forms.NumberInput(
+            attrs={"min": "1", "step": "1"}
+        ),
+    )

@@ -85,6 +85,8 @@ body {
 .balance-list dt { color: #526176; font-weight: 600; }
 .balance-list dd { font-size: 1.2rem; font-variant-numeric: tabular-nums; font-weight: 700; margin: 0; white-space: nowrap; }
 
+.sale-estimate { font-variant-numeric: tabular-nums; font-weight: 600; }
+
 .form-card form p { margin-bottom: 1.25rem; }
 .form-card label { display: block; font-weight: 600; margin-bottom: .4rem; }
 .form-card input { border: 1px solid #98a7bc; border-radius: .375rem; display: block; padding: .5rem .75rem; width: 100%; }

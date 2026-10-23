@@ -6,6 +6,12 @@ from django.db.models import Q
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 
+# Simulated shares represented by a stock (not daily trading volume).
+# Used for programmatic creation and for backfilling existing stocks;
+# the administrator form always requires an explicit value.
+DEFAULT_SHARE_VOLUME = 1_000_000
+
+
 class Stock(models.Model):
     symbol = models.CharField(
         max_length=10,
@@ -18,10 +24,24 @@ class Stock(models.Model):
         ],
     )
     company_name = models.CharField(max_length=200)
+    initial_price = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal("0.01"))],
+        help_text="Starting simulated price. Preserved after creation.",
+    )
     current_price = models.DecimalField(
         max_digits=12,
         decimal_places=2,
         validators=[MinValueValidator(Decimal("0.01"))],
+    )
+    share_volume = models.PositiveBigIntegerField(
+        default=DEFAULT_SHARE_VOLUME,
+        validators=[MinValueValidator(1)],
+        help_text=(
+            "Total simulated shares represented by the stock. "
+            "Not daily trading volume."
+        ),
     )
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -33,13 +53,39 @@ class Stock(models.Model):
             models.CheckConstraint(
                 condition=Q(current_price__gte=Decimal("0.01")),
                 name="stock_price_at_least_one_cent",
-            )
+            ),
+            models.CheckConstraint(
+                condition=Q(initial_price__gte=Decimal("0.01")),
+                name="stock_initial_price_at_least_one_cent",
+            ),
+            models.CheckConstraint(
+                condition=Q(share_volume__gte=1),
+                name="stock_share_volume_positive",
+            ),
         ]
 
     def save(self, *args, **kwargs):
         self.symbol = self.symbol.strip().upper()
         self.company_name = self.company_name.strip()
+        # A new stock starts trading at its initial price. Existing callers
+        # that only supply current_price keep working.
+        if self.initial_price is None and self.current_price is not None:
+            self.initial_price = self.current_price
+        if self.current_price is None and self.initial_price is not None:
+            self.current_price = self.initial_price
         super().save(*args, **kwargs)
+
+    @property
+    def market_capitalization(self):
+        """share_volume x current_price, in simulated dollars."""
+        return Decimal(self.share_volume) * self.current_price
+
+    @property
+    def statistics(self):
+        """Market statistics for templates; see market.services."""
+        from .services import get_stock_statistics
+
+        return get_stock_statistics(self)
 
     def __str__(self):
         return f"{self.symbol} - {self.company_name}"
@@ -134,4 +180,60 @@ class PriceHistory(models.Model):
         return (
             f"{self.stock.symbol}: "
             f"${self.previous_price} to ${self.new_price}"
+        )
+
+
+class StockDailyStatistic(models.Model):
+    """Opening, high, and low price for one stock on one market day."""
+
+    stock = models.ForeignKey(
+        Stock,
+        on_delete=models.PROTECT,
+        related_name="daily_statistics",
+    )
+    market_date = models.DateField(
+        help_text="Calendar date in the market time zone.",
+    )
+    opening_price = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal("0.01"))],
+    )
+    high_price = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal("0.01"))],
+    )
+    low_price = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        validators=[MinValueValidator(Decimal("0.01"))],
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-market_date", "stock__symbol"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["stock", "market_date"],
+                name="unique_daily_statistic_per_stock_day",
+            ),
+            models.CheckConstraint(
+                condition=Q(low_price__gte=Decimal("0.01")),
+                name="daily_low_at_least_one_cent",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    Q(low_price__lte=models.F("opening_price"))
+                    & Q(opening_price__lte=models.F("high_price"))
+                ),
+                name="daily_low_open_high_order",
+            ),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.stock.symbol} {self.market_date}: "
+            f"O {self.opening_price} H {self.high_price} L {self.low_price}"
         )
