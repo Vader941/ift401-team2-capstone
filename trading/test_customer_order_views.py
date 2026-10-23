@@ -7,7 +7,7 @@ from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
 from django.urls import reverse
 
-from market.models import Stock
+from market.models import PriceHistory, Stock
 
 from .forms import SellOrderForm
 from .models import Holding, Order, Portfolio
@@ -94,8 +94,8 @@ class CustomerOrderViewTests(TestCase):
                 self.assertEqual(response.status_code, 302)
                 self.assertIn(reverse("login"), response["Location"])
 
-    @patch("trading.views.update_stock_price")
-    def test_sell_page_shows_available_shares_and_live_estimate_control(self, _update):
+ 
+    def test_sell_page_shows_available_shares_and_live_estimate_control(self):
         response = self.client.get(
             reverse("trading:sell", args=[self.stock.pk])
         )
@@ -109,9 +109,9 @@ class CustomerOrderViewTests(TestCase):
     @patch("market.services.random.uniform", return_value=0)
     @patch("trading.services.is_market_open", return_value=True)
     @patch("trading.services.timezone.now")
-    @patch("trading.views.update_stock_price")
+
     def test_open_market_sell_executes_and_redirects(
-        self, _view_update, service_now, _market_open, _random
+        self, service_now, _market_open, _random
     ):
         service_now.return_value = self.open_time
         response = self.client.post(
@@ -134,9 +134,9 @@ class CustomerOrderViewTests(TestCase):
     @patch("market.services.random.uniform", return_value=0)
     @patch("trading.services.is_market_open", return_value=False)
     @patch("trading.services.timezone.now")
-    @patch("trading.views.update_stock_price")
+
     def test_closed_market_sell_creates_pending_order_and_reserves_shares(
-        self, _view_update, service_now, _market_open, _random
+        self, service_now, _market_open, _random
     ):
         service_now.return_value = self.closed_time
         response = self.client.post(
@@ -156,8 +156,8 @@ class CustomerOrderViewTests(TestCase):
         self.assertEqual(self.holding.reserved_quantity, 4)
 
     @patch("trading.services.place_sell_order")
-    @patch("trading.views.update_stock_price")
-    def test_invalid_sell_input_does_not_call_service(self, _update, place_sell):
+
+    def test_invalid_sell_input_does_not_call_service(self, place_sell):
         response = self.client.post(
             reverse("trading:sell", args=[self.stock.pk]),
             {"quantity": "1.5"},
@@ -265,7 +265,38 @@ class CustomerOrderViewTests(TestCase):
         self.assertEqual(response.status_code, 405)
         order.refresh_from_db()
         self.assertEqual(order.status, Order.Status.PENDING)
+    def test_inactive_sell_page_does_not_change_price_or_history(self):
+        self.stock.is_active = False
+        self.stock.save(update_fields=["is_active"])
 
+        with (
+            patch(
+                "market.services.timezone.now",
+                return_value=self.open_time,
+            ),
+            patch(
+                "market.services.random.uniform",
+                return_value=1,
+            ) as random_source,
+        ):
+            response = self.client.get(
+                reverse("trading:sell", args=[self.stock.pk])
+            )
+
+        self.stock.refresh_from_db()
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(
+            response,
+            "This stock is not available for simulated trading.",
+        )
+        self.assertEqual(
+            self.stock.current_price, Decimal("25.00")
+        )
+        self.assertFalse(
+            PriceHistory.objects.filter(stock=self.stock).exists()
+        )
+        random_source.assert_not_called()
 
 class CancellationCsrfTests(TestCase):
     def test_cancel_post_requires_csrf_token(self):

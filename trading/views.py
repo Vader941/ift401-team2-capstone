@@ -6,7 +6,7 @@ from django.views.decorators.http import require_http_methods
 
 from accounts.services import available_cash
 from market.models import Stock
-from market.services import is_market_open, update_stock_price
+from market.services import is_market_open
 
 from .forms import BuyOrderForm, SellOrderForm
 from .models import Holding, Order, Portfolio
@@ -123,8 +123,6 @@ def buy(request, pk):
 @require_http_methods(["GET", "POST"])
 def sell(request, pk):
     stock = get_object_or_404(Stock, pk=pk)
-    update_stock_price(stock)
-    stock.refresh_from_db(fields=["current_price"])
 
     portfolio = Portfolio.objects.filter(user=request.user).first()
     holding = (
