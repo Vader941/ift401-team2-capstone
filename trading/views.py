@@ -17,13 +17,11 @@ from .services import (
     cancel_pending_order,
     place_buy_order,
     place_sell_order,
-    process_pending_orders,
 )
 
 
 @login_required
 def dashboard(request):
-    process_pending_orders(request.user)
 
     portfolio = Portfolio.objects.filter(user=request.user).first()
     if portfolio is None:

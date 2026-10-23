@@ -94,7 +94,6 @@ class CustomerOrderViewTests(TestCase):
                 self.assertEqual(response.status_code, 302)
                 self.assertIn(reverse("login"), response["Location"])
 
- 
     def test_sell_page_shows_available_shares_and_live_estimate_control(self):
         response = self.client.get(
             reverse("trading:sell", args=[self.stock.pk])
@@ -211,10 +210,7 @@ class CustomerOrderViewTests(TestCase):
         order.refresh_from_db()
         self.assertEqual(order.status, Order.Status.PENDING)
 
-        with patch("trading.views.process_pending_orders") as process_orders:
-            response = self.client.post(cancel_url)
-
-        process_orders.assert_not_called()
+        response = self.client.post(cancel_url)
         self.assertRedirects(
             response,
             reverse("trading:pending-orders"),
