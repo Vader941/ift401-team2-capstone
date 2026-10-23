@@ -38,7 +38,8 @@ class StockAdminTests(TestCase):
         data = {
             "symbol": "NEW",
             "company_name": "New Company",
-            "current_price": "20.00",
+            "initial_price": "20.00",
+            "share_volume": "5000000",
             "is_active": "on",
             "_save": "Save",
         }
@@ -85,7 +86,9 @@ class StockAdminTests(TestCase):
         self.assertEqual(response.status_code, 302)
         stock = Stock.objects.get(symbol="NEW")
         self.assertEqual(stock.company_name, "New Company")
+        self.assertEqual(stock.initial_price, Decimal("20.00"))
         self.assertEqual(stock.current_price, Decimal("20.00"))
+        self.assertEqual(stock.share_volume, 5_000_000)
         self.assertTrue(stock.is_active)
 
     def test_duplicate_symbol_is_rejected(self):
@@ -108,11 +111,11 @@ class StockAdminTests(TestCase):
             with self.subTest(price=price):
                 response = self.client.post(
                     self.add_url,
-                    self.stock_data(current_price=price),
+                    self.stock_data(initial_price=price),
                 )
                 self.assertEqual(response.status_code, 200)
                 self.assertIn(
-                    "current_price",
+                    "initial_price",
                     response.context["adminform"].form.errors,
                 )
                 self.assertEqual(Stock.objects.count(), 1)
@@ -168,7 +171,6 @@ class StockAdminTests(TestCase):
         data = self.stock_data(
             symbol="TEST",
             company_name="Updated Company",
-            current_price="10.00",
         )
         del data["is_active"]
 

@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo
 from django.db import transaction
 from django.utils import timezone
 
-from .models import MarketException, PriceHistory, Stock
+from .models import MarketException, PriceHistory, Stock, StockDailyStatistic
 
 
 MARKET_TIME_ZONE = ZoneInfo("America/New_York")
@@ -37,6 +37,38 @@ def is_market_open(at=None):
     # Opening is inclusive; closing is exclusive.
     return opens_at <= local_at.time() < closes_at
 
+
+
+
+def market_date_for(at=None):
+    """Return the calendar date of an aware datetime in the market time zone."""
+    at = timezone.now() if at is None else at
+    if timezone.is_naive(at):
+        raise ValueError("Market dates require a timezone-aware datetime.")
+    return at.astimezone(MARKET_TIME_ZONE).date()
+
+
+def record_daily_price(stock, price, at):
+    """Fold an established price into the stock's statistics for that day.
+
+    The first price recorded on a market day becomes the opening price;
+    every recorded price, including the opening, updates the high and low.
+    Call while the Stock row is locked. Returns the price.
+    """
+    daily, created = StockDailyStatistic.objects.get_or_create(
+        stock=stock,
+        market_date=market_date_for(at),
+        defaults={
+            "opening_price": price,
+            "high_price": price,
+            "low_price": price,
+        },
+    )
+    if not created and (price > daily.high_price or price < daily.low_price):
+        daily.high_price = max(daily.high_price, price)
+        daily.low_price = min(daily.low_price, price)
+        daily.save(update_fields=["high_price", "low_price", "updated_at"])
+    return price
 
 
 def update_stock_price(
@@ -77,7 +109,7 @@ def update_stock_price(
         latest = locked_stock.price_history.first()
 
         if latest is not None and at - latest.effective_at < minimum_interval:
-            return previous_price
+            return record_daily_price(locked_stock, previous_price, at)
 
         proposed_change = Decimal(
             str(source(-max_change_percent, max_change_percent))
@@ -97,7 +129,7 @@ def update_stock_price(
         # A proposed change that rounds to the existing cent is not recorded
         # as a price change.
         if new_price == previous_price:
-            return previous_price
+            return record_daily_price(locked_stock, previous_price, at)
 
         actual_change = (
             (new_price - previous_price)
@@ -105,7 +137,7 @@ def update_stock_price(
             * Decimal("100")
         )
         if abs(actual_change) > max_change_percent:
-            return previous_price
+            return record_daily_price(locked_stock, previous_price, at)
 
         actual_change = actual_change.quantize(
             Decimal("0.0001"),
@@ -120,6 +152,55 @@ def update_stock_price(
             percentage_change=actual_change,
             effective_at=at,
         )
+        record_daily_price(locked_stock, new_price, at)
 
     stock.current_price = new_price
     return new_price
+
+
+PERCENT = Decimal("0.01")
+
+
+def get_stock_statistics(stock, *, at=None):
+    """Return the documented market-data values for one stock.
+
+    Values come from stored data only; this function never changes prices.
+    The reference day is the most recent recorded market day on or before
+    ``at``. Before any recorded day, the initial price is used as the
+    opening, high, and low reference.
+    """
+    at = timezone.now() if at is None else at
+    daily = (
+        StockDailyStatistic.objects.filter(
+            stock_id=stock.pk,
+            market_date__lte=market_date_for(at),
+        )
+        .order_by("-market_date")
+        .first()
+    )
+    current = stock.current_price
+    if daily is None:
+        opening = high = low = stock.initial_price
+        market_date = None
+    else:
+        opening, high, low = daily.opening_price, daily.high_price, daily.low_price
+        market_date = daily.market_date
+
+    change = current - opening
+    change_percent = (change / opening * Decimal("100")).quantize(
+        PERCENT, rounding=ROUND_HALF_UP
+    )
+    return {
+        "symbol": stock.symbol,
+        "company_name": stock.company_name,
+        "initial_price": stock.initial_price,
+        "current_price": current,
+        "share_volume": stock.share_volume,
+        "market_capitalization": Decimal(stock.share_volume) * current,
+        "opening_price": opening,
+        "high_price": high,
+        "low_price": low,
+        "price_change": change,
+        "price_change_percent": change_percent,
+        "statistics_date": market_date,
+    }

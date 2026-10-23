@@ -1,6 +1,34 @@
+from django import forms
 from django.contrib import admin
 
-from .models import MarketException, PriceHistory, Stock
+from .models import MarketException, PriceHistory, Stock, StockDailyStatistic
+
+
+class StockCreationForm(forms.ModelForm):
+    """New stocks: the administrator supplies every starting value."""
+
+    class Meta:
+        model = Stock
+        fields = (
+            "symbol",
+            "company_name",
+            "initial_price",
+            "share_volume",
+            "is_active",
+        )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Require an explicit volume instead of silently using the default.
+        self.fields["share_volume"].initial = None
+        self.fields["share_volume"].required = True
+
+    def save(self, commit=True):
+        stock = super().save(commit=False)
+        stock.current_price = stock.initial_price
+        if commit:
+            stock.save()
+        return stock
 
 
 @admin.register(Stock)
@@ -9,13 +37,46 @@ class StockAdmin(admin.ModelAdmin):
         "symbol",
         "company_name",
         "current_price",
+        "initial_price",
+        "share_volume",
+        "market_capitalization_display",
         "is_active",
         "updated_at",
     )
     list_filter = ("is_active",)
     search_fields = ("symbol", "company_name")
     ordering = ("symbol",)
-    readonly_fields = ("created_at", "updated_at")
+
+    # Ordinary edits may change only the company name and active status.
+    change_fields = ("company_name", "is_active")
+    change_readonly_fields = (
+        "symbol",
+        "initial_price",
+        "current_price",
+        "share_volume",
+        "market_capitalization_display",
+        "created_at",
+        "updated_at",
+    )
+
+    @admin.display(description="Market capitalization")
+    def market_capitalization_display(self, obj):
+        return f"${obj.market_capitalization:,.2f}"
+
+    def get_form(self, request, obj=None, **kwargs):
+        if obj is None:
+            kwargs["form"] = StockCreationForm
+        return super().get_form(request, obj, **kwargs)
+
+    def get_fields(self, request, obj=None):
+        if obj is None:
+            return StockCreationForm.Meta.fields
+        return self.change_fields + self.change_readonly_fields
+
+    def get_readonly_fields(self, request, obj=None):
+        if obj is None:
+            return ()
+        return self.change_readonly_fields
 
 
 @admin.register(MarketException)
@@ -44,6 +105,38 @@ class PriceHistoryAdmin(admin.ModelAdmin):
         "new_price",
         "percentage_change",
         "effective_at",
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(StockDailyStatistic)
+class StockDailyStatisticAdmin(admin.ModelAdmin):
+    list_display = (
+        "stock",
+        "market_date",
+        "opening_price",
+        "high_price",
+        "low_price",
+    )
+    list_filter = ("market_date",)
+    search_fields = ("stock__symbol", "stock__company_name")
+    ordering = ("-market_date", "stock__symbol")
+    readonly_fields = (
+        "stock",
+        "market_date",
+        "opening_price",
+        "high_price",
+        "low_price",
+        "created_at",
+        "updated_at",
     )
 
     def has_add_permission(self, request):
