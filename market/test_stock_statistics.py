@@ -193,13 +193,19 @@ class DailyStatisticsTests(TestCase):
         self.assertEqual(stats["price_change_percent"], Decimal("0.00"))
         self.assertIsNone(stats["statistics_date"])
 
-    def test_first_update_of_day_sets_opening_high_and_low(self):
-        self.update(TUESDAY_OPEN, "1.00")
+    def test_opening_is_price_before_first_update_of_day(self):
+        self.update(TUESDAY_OPEN, "1.00")  # 10.00 -> 10.10
         daily = StockDailyStatistic.objects.get(stock=self.stock)
         self.assertEqual(str(daily.market_date), "2026-10-20")
-        self.assertEqual(daily.opening_price, Decimal("10.10"))
+        self.assertEqual(daily.opening_price, Decimal("10.00"))
         self.assertEqual(daily.high_price, Decimal("10.10"))
-        self.assertEqual(daily.low_price, Decimal("10.10"))
+        self.assertEqual(daily.low_price, Decimal("10.00"))
+
+        # The first movement of the day counts toward the daily change.
+        self.stock.refresh_from_db()
+        stats = get_stock_statistics(self.stock, at=TUESDAY_OPEN)
+        self.assertEqual(stats["price_change"], Decimal("0.10"))
+        self.assertEqual(stats["price_change_percent"], Decimal("1.00"))
 
     def test_unchanged_first_update_still_establishes_opening(self):
         self.update(TUESDAY_OPEN, "0.00")
@@ -221,14 +227,14 @@ class DailyStatisticsTests(TestCase):
         self.assertEqual(daily.opening_price, Decimal("10.00"))
 
     def test_later_updates_move_high_and_low_but_not_opening(self):
-        self.update(TUESDAY_OPEN, "1.00")  # 10.10 (opening)
+        self.update(TUESDAY_OPEN, "1.00")  # opening 10.00 -> 10.10
         self.update(TUESDAY_OPEN + timedelta(minutes=1), "1.00")  # 10.20
         self.update(TUESDAY_OPEN + timedelta(minutes=2), "-1.00")  # 10.10
         self.update(TUESDAY_OPEN + timedelta(minutes=3), "-1.00")  # 10.00
         self.update(TUESDAY_OPEN + timedelta(minutes=4), "-1.00")  # 9.90
 
         daily = StockDailyStatistic.objects.get(stock=self.stock)
-        self.assertEqual(daily.opening_price, Decimal("10.10"))
+        self.assertEqual(daily.opening_price, Decimal("10.00"))
         self.assertEqual(daily.high_price, Decimal("10.20"))
         self.assertEqual(daily.low_price, Decimal("9.90"))
 
@@ -237,8 +243,8 @@ class DailyStatisticsTests(TestCase):
             self.stock, at=TUESDAY_OPEN + timedelta(minutes=5)
         )
         self.assertEqual(stats["current_price"], Decimal("9.90"))
-        self.assertEqual(stats["price_change"], Decimal("-0.20"))
-        self.assertEqual(stats["price_change_percent"], Decimal("-1.98"))
+        self.assertEqual(stats["price_change"], Decimal("-0.10"))
+        self.assertEqual(stats["price_change_percent"], Decimal("-1.00"))
 
     def test_closed_market_keeps_previous_day_values(self):
         self.update(TUESDAY_OPEN, "1.00")
@@ -248,18 +254,19 @@ class DailyStatisticsTests(TestCase):
         self.stock.refresh_from_db()
         stats = get_stock_statistics(self.stock, at=TUESDAY_EVENING)
         self.assertEqual(str(stats["statistics_date"]), "2026-10-20")
-        self.assertEqual(stats["opening_price"], Decimal("10.10"))
+        self.assertEqual(stats["opening_price"], Decimal("10.00"))
+        self.assertEqual(stats["current_price"], Decimal("10.10"))
 
     def test_new_market_day_starts_new_statistics(self):
-        self.update(TUESDAY_OPEN, "1.00")  # Tue opening 10.10
+        self.update(TUESDAY_OPEN, "1.00")  # Tue opening 10.00 -> 10.10
         self.update(TUESDAY_OPEN + timedelta(minutes=1), "1.00")  # 10.20
-        self.update(WEDNESDAY_OPEN, "-1.00")  # Wed opening 10.10
+        self.update(WEDNESDAY_OPEN, "-1.00")  # Wed opening 10.20 -> 10.10
 
         wednesday = StockDailyStatistic.objects.get(
             stock=self.stock, market_date="2026-10-21"
         )
-        self.assertEqual(wednesday.opening_price, Decimal("10.10"))
-        self.assertEqual(wednesday.high_price, Decimal("10.10"))
+        self.assertEqual(wednesday.opening_price, Decimal("10.20"))
+        self.assertEqual(wednesday.high_price, Decimal("10.20"))
         self.assertEqual(wednesday.low_price, Decimal("10.10"))
 
         tuesday = StockDailyStatistic.objects.get(
