@@ -7,7 +7,7 @@ from trading.services import process_pending_orders
 
 from .models import Stock
 from .services import is_market_open, update_stock_price
-
+from .schedule import get_market_schedule
 
 logger = logging.getLogger(__name__)
 
@@ -15,8 +15,9 @@ logger = logging.getLogger(__name__)
 def run_market_cycle():
     """Advance active stocks, then evaluate customers' pending orders."""
     at = timezone.now()
+    schedule = get_market_schedule()
     result = {
-        "market_open": is_market_open(at),
+        "market_open": is_market_open(at, schedule=schedule),
         "stocks_checked": 0,
         "prices_changed": 0,
         "portfolios_processed": 0,
@@ -31,7 +32,9 @@ def run_market_cycle():
     # rather than proceeding with an incomplete price pass.
     for stock in Stock.objects.filter(is_active=True).iterator():
         previous_price = stock.current_price
-        current_price = update_stock_price(stock, at=at)
+        current_price = update_stock_price(
+            stock, at=at, schedule=schedule
+        )
 
         result["stocks_checked"] += 1
         if current_price != previous_price:
@@ -52,7 +55,9 @@ def run_market_cycle():
 
     for portfolio in portfolios.iterator():
         try:
-            process_pending_orders(portfolio.user)
+            process_pending_orders(
+                portfolio.user, at=at, schedule=schedule
+            )
         except Exception:
             # Each customer's service has its own transaction.
             # A failed customer must not prevent others being processed.
