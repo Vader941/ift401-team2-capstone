@@ -3,8 +3,9 @@
 from decimal import Decimal
 
 from accounts.services import available_cash
-from trading.models import Portfolio
+from trading.models import Portfolio, CashTransaction, Order
 
+from django.core.paginator import Paginator
 
 def get_portfolio_summary(user):
     """Return the user's balances and holdings without changing data.
@@ -65,3 +66,94 @@ def get_portfolio_summary(user):
         ),
         "holdings": holdings,
     }
+
+def get_account_history(user, *, page=1, per_page=25):
+    """Return a paginated, newest-first history for the user's account.
+
+    Executed trades appear through cash transactions only.
+    Cancellations have no cash amount or resulting balance.
+    Equal timestamps sort by source name, then source ID, descending.
+    """
+    if (
+        isinstance(per_page, bool)
+        or not isinstance(per_page, int)
+        or per_page < 1
+    ):
+        raise ValueError("per_page must be a positive integer.")
+
+    events = []
+
+    cash_transactions = (
+        CashTransaction.objects
+        .filter(portfolio__user=user)
+        .select_related("order__stock")
+    )
+
+    for entry in cash_transactions:
+        order = entry.order
+        is_trade = entry.transaction_type in (
+            CashTransaction.TransactionType.PURCHASE,
+            CashTransaction.TransactionType.SALE,
+        )
+
+        events.append({
+            "event_id": f"cash:{entry.pk}",
+            "event_type": entry.transaction_type,
+            "occurred_at": entry.created_at,
+            "amount": entry.amount,
+            "balance_after": entry.balance_after,
+            "order_id": entry.order_id,
+            "symbol": order.stock.symbol if order else None,
+            "quantity": order.quantity if order else None,
+            "execution_price": (
+                order.execution_price if order and is_trade else None
+            ),
+            "description": entry.description,
+            "_source": "cash",
+            "_source_id": entry.pk,
+        })
+
+    cancelled_orders = (
+        Order.objects
+        .filter(
+            portfolio__user=user,
+            status=Order.Status.CANCELLED,
+        )
+        .select_related("stock")
+    )
+
+    for order in cancelled_orders:
+        if order.cancelled_at is None:
+            raise ValueError(
+                f"Cancelled order {order.pk} has no cancellation timestamp."
+            )
+
+        events.append({
+            "event_id": f"cancelled_order:{order.pk}",
+            "event_type": "CANCELLATION",
+            "occurred_at": order.cancelled_at,
+            "amount": None,
+            "balance_after": None,
+            "order_id": order.pk,
+            "symbol": order.stock.symbol,
+            "quantity": order.quantity,
+            "execution_price": None,
+            "description": order.cancellation_reason,
+            "_source": "cancelled_order",
+            "_source_id": order.pk,
+        })
+
+    events.sort(
+        key=lambda event: (
+            event["occurred_at"],
+            event["_source"],
+            event["_source_id"],
+        ),
+        reverse=True,
+    )
+
+    for event in events:
+        del event["_source"]
+        del event["_source_id"]
+
+    return Paginator(events, per_page).get_page(page)
