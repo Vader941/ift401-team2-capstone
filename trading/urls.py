@@ -6,6 +6,8 @@ app_name = "trading"
 
 urlpatterns = [
     path("dashboard/", views.dashboard, name="dashboard"),
+    path("portfolio/", views.portfolio, name="portfolio"),
+    path("history/", views.account_history, name="account-history"),
     path("stocks/<int:pk>/buy/", views.buy, name="buy"),
     path("stocks/<int:pk>/sell/", views.sell, name="sell"),
     path("orders/pending/", views.pending_orders, name="pending-orders"),
