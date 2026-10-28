@@ -1,4 +1,6 @@
 from decimal import Decimal
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+from datetime import time
 
 from django.core.validators import MinValueValidator, RegexValidator
 from django.db import models
@@ -236,4 +238,85 @@ class StockDailyStatistic(models.Model):
         return (
             f"{self.stock.symbol} {self.market_date}: "
             f"O {self.opening_price} H {self.high_price} L {self.low_price}"
+        )
+class MarketSchedule(models.Model):
+    """One regular schedule for the simulated market."""
+
+    id = models.PositiveSmallIntegerField(
+        primary_key=True,
+        default=1,
+        editable=False,
+    )
+    opening_time = models.TimeField(default=time(9, 30))
+    closing_time = models.TimeField(default=time(16, 0))
+    timezone_name = models.CharField(
+        max_length=100,
+        default="America/New_York",
+        help_text="IANA timezone, such as America/New_York.",
+    )
+    monday = models.BooleanField(default=True)
+    tuesday = models.BooleanField(default=True)
+    wednesday = models.BooleanField(default=True)
+    thursday = models.BooleanField(default=True)
+    friday = models.BooleanField(default=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "regular market schedule"
+        verbose_name_plural = "regular market schedule"
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(id=1),
+                name="market_schedule_singleton",
+            ),
+            models.CheckConstraint(
+                condition=Q(closing_time__gt=models.F("opening_time")),
+                name="market_schedule_valid_hours",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    Q(monday=True)
+                    | Q(tuesday=True)
+                    | Q(wednesday=True)
+                    | Q(thursday=True)
+                    | Q(friday=True)
+                ),
+                name="market_schedule_has_weekday",
+            ),
+        ]
+
+    def clean(self):
+        super().clean()
+        errors = {}
+
+        try:
+            ZoneInfo(self.timezone_name)
+        except (ZoneInfoNotFoundError, ValueError, TypeError):
+            errors["timezone_name"] = "Enter a valid IANA timezone."
+
+        if (
+            self.opening_time is not None
+            and self.closing_time is not None
+            and self.closing_time <= self.opening_time
+        ):
+            errors["closing_time"] = (
+                "Closing time must be later than opening time "
+                "on the same day."
+            )
+
+        if not any((
+            self.monday,
+            self.tuesday,
+            self.wednesday,
+            self.thursday,
+            self.friday,
+        )):
+            errors["monday"] = "Select at least one trading weekday."
+
+        if errors:
+            raise ValidationError(errors)
+
+    def __str__(self):
+        return (
+            f"Regular market schedule ({self.timezone_name})"
         )

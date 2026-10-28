@@ -1,54 +1,52 @@
 import random
 from datetime import time, timedelta
 from decimal import Decimal, ROUND_HALF_UP
-from zoneinfo import ZoneInfo
 
 from django.db import transaction
 from django.utils import timezone
 
 from .models import MarketException, PriceHistory, Stock, StockDailyStatistic
+from .schedule import get_market_schedule
 
 
-MARKET_TIME_ZONE = ZoneInfo("America/New_York")
-REGULAR_OPEN = time(9, 30)
-REGULAR_CLOSE = time(16, 0)
-
-
-def is_market_open(at=None):
-    """Return whether the simulated market is open at an aware datetime."""
+def is_market_open(at=None, *, schedule=None):
+    """Check regular hours and date exceptions using one schedule snapshot."""
     at = timezone.now() if at is None else at
     if timezone.is_naive(at):
         raise ValueError("Market checks require a timezone-aware datetime.")
 
-    local_at = at.astimezone(MARKET_TIME_ZONE)
+    schedule = get_market_schedule() if schedule is None else schedule
+    local_at = at.astimezone(schedule.timezone)
 
-    # Weekend trading is outside the current project requirements.
-    if local_at.weekday() >= 5:
+    # Exceptions cannot enable weekends or disabled weekdays.
+    if local_at.weekday() not in schedule.weekdays:
         return False
 
-    exception = MarketException.objects.filter(date=local_at.date()).first()
+    exception = MarketException.objects.filter(
+        date=local_at.date()
+    ).first()
+
     if exception is not None:
         if exception.is_closed:
             return False
         opens_at, closes_at = exception.opens_at, exception.closes_at
     else:
-        opens_at, closes_at = REGULAR_OPEN, REGULAR_CLOSE
+        opens_at = schedule.opening_time
+        closes_at = schedule.closing_time
 
-    # Opening is inclusive; closing is exclusive.
     return opens_at <= local_at.time() < closes_at
 
 
-
-
-def market_date_for(at=None):
-    """Return the calendar date of an aware datetime in the market time zone."""
+def market_date_for(at=None, *, schedule=None):
+    """Return the date in the configured market timezone."""
     at = timezone.now() if at is None else at
     if timezone.is_naive(at):
         raise ValueError("Market dates require a timezone-aware datetime.")
-    return at.astimezone(MARKET_TIME_ZONE).date()
 
+    schedule = get_market_schedule() if schedule is None else schedule
+    return at.astimezone(schedule.timezone).date()
 
-def record_daily_price(stock, price, at):
+def record_daily_price(stock, price, at, *, schedule=None):
     """Fold an established price into the stock's statistics for that day.
 
     The first price recorded on a market day becomes the opening price.
@@ -59,7 +57,7 @@ def record_daily_price(stock, price, at):
     """
     daily, created = StockDailyStatistic.objects.get_or_create(
         stock=stock,
-        market_date=market_date_for(at),
+        market_date=market_date_for(at, schedule=schedule),
         defaults={
             "opening_price": price,
             "high_price": price,
@@ -80,6 +78,7 @@ def update_stock_price(
     random_source=None,
     minimum_interval=timedelta(seconds=60),
     max_change_percent=Decimal("1.00"),
+    schedule=None,
 ):
     """Update one stock when the market is open and its interval has elapsed.
 
@@ -96,7 +95,9 @@ def update_stock_price(
     if max_change_percent < 0:
         raise ValueError("The maximum percentage change cannot be negative.")
 
-    if not is_market_open(at):
+    schedule = get_market_schedule() if schedule is None else schedule
+
+    if not is_market_open(at, schedule=schedule):
         return Stock.objects.get(pk=stock.pk).current_price
 
     if random_source is None:
@@ -111,7 +112,7 @@ def update_stock_price(
         # The price in effect when the market day's first update is
         # evaluated becomes that day's opening, so the daily change covers
         # the full movement from the start of trading.
-        record_daily_price(locked_stock, previous_price, at)
+        record_daily_price(locked_stock, previous_price, at, schedule=schedule)
         latest = locked_stock.price_history.first()
 
         if latest is not None and at - latest.effective_at < minimum_interval:
@@ -158,7 +159,7 @@ def update_stock_price(
             percentage_change=actual_change,
             effective_at=at,
         )
-        record_daily_price(locked_stock, new_price, at)
+        record_daily_price(locked_stock, new_price, at, schedule=schedule)
 
     stock.current_price = new_price
     return new_price
