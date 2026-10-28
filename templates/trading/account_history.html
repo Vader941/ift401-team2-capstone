@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block title %}Account Activity | Mock Stock Trading System{% endblock %}
+
+{% block content %}
+<section class="page-heading d-sm-flex justify-content-between align-items-end gap-3">
+    <div>
+        <p class="eyebrow mb-2">Simulated account</p>
+        <h1>Account activity</h1>
+        <p class="lead mb-0">Your deposits, withdrawals, executed trades, and cancelled orders.</p>
+    </div>
+    <div class="d-flex flex-wrap gap-2 mt-3 mt-sm-0">
+        <a class="btn btn-outline-primary" href="{% url 'trading:pending-orders' %}">View pending orders</a>
+        <a class="btn btn-outline-primary" href="{% url 'trading:dashboard' %}">Back to dashboard</a>
+    </div>
+</section>
+
+{% if history_page.object_list %}
+    <section class="card content-card" aria-labelledby="activity-history-heading">
+        <div class="card-body p-4">
+            <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-3">
+                <div>
+                    <p class="eyebrow mb-1">Newest first</p>
+                    <h2 id="activity-history-heading" class="h3 mb-0">Transaction history</h2>
+                </div>
+                <span class="small text-secondary">{{ history_page.paginator.count }} recorded event{{ history_page.paginator.count|pluralize }}</span>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <caption class="visually-hidden">Your simulated account activity</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col">Date and time ({{ event_timezone_label }})</th>
+                            <th scope="col">Activity</th>
+                            <th scope="col">Details</th>
+                            <th scope="col" class="text-end">Amount (USD)</th>
+                            <th scope="col" class="text-end">Cash balance after</th>
+                            <th scope="col">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for event in history_page.object_list %}
+                            <tr>
+                                <td class="text-nowrap"><time datetime="{{ event.local_occurred_at|date:'c' }}">{{ event.local_occurred_at|date:"M j, Y, g:i a" }} ET</time></td>
+                                <td>{{ event.event_type_label }}</td>
+                                <td>
+                                    {% if event.symbol %}
+                                        <span class="fw-semibold">{{ event.symbol }}</span>
+                                        {% if event.quantity %}<span> · {{ event.quantity }} share{{ event.quantity|pluralize }}</span>{% endif %}
+                                        {% if event.execution_price %}<span class="d-block small text-secondary">Execution price ${{ event.execution_price|floatformat:"2g" }}</span>{% endif %}
+                                    {% endif %}
+                                    {% if event.description %}<span class="d-block small text-secondary">{{ event.description }}</span>{% endif %}
+                                </td>
+                                <td class="text-end text-nowrap">
+                                    {% if event.amount is not None %}
+                                        {% if event.amount < 0 %}&minus;${{ event.amount|floatformat:"2g"|slice:"1:" }}{% else %}${{ event.amount|floatformat:"2g" }}{% endif %}
+                                    {% else %}<span class="text-secondary">—</span>{% endif %}
+                                </td>
+                                <td class="text-end text-nowrap">
+                                    {% if event.balance_after is not None %}${{ event.balance_after|floatformat:"2g" }}{% else %}<span class="text-secondary">—</span>{% endif %}
+                                </td>
+                                <td>{{ event.status_label }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            {% if history_page.paginator.num_pages > 1 %}
+                <nav class="d-flex justify-content-between align-items-center gap-3 mt-4" aria-label="Account activity pages">
+                    {% if history_page.has_previous %}
+                        <a class="btn btn-outline-primary btn-sm" href="?page={{ history_page.previous_page_number }}">Previous</a>
+                    {% else %}
+                        <span></span>
+                    {% endif %}
+                    <span class="small text-secondary">Page {{ history_page.number }} of {{ history_page.paginator.num_pages }}</span>
+                    {% if history_page.has_next %}
+                        <a class="btn btn-outline-primary btn-sm" href="?page={{ history_page.next_page_number }}">Next</a>
+                    {% else %}
+                        <span></span>
+                    {% endif %}
+                </nav>
+            {% endif %}
+            <p class="small text-secondary mt-3 mb-0">All amounts and activity are part of a no-real-money simulation.</p>
+        </div>
+    </section>
+{% else %}
+    <section class="empty-state text-center" aria-labelledby="history-empty-heading">
+        {% if has_portfolio %}
+            <h2 id="history-empty-heading" class="h4">No account activity yet</h2>
+            <p class="text-secondary mb-3">Deposits, withdrawals, executed trades, and cancellations will appear here.</p>
+            <a class="btn btn-outline-primary" href="{% url 'market:stock-list' %}">Explore stocks</a>
+        {% else %}
+            <h2 id="history-empty-heading" class="h4">No simulated portfolio is linked to this account</h2>
+            <p class="text-secondary mb-3">There is no account history to display.</p>
+            <a class="btn btn-outline-primary" href="{% url 'trading:dashboard' %}">Back to dashboard</a>
+        {% endif %}
+    </section>
+{% endif %}
+{% endblock %}

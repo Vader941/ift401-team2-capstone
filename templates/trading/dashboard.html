@@ -10,6 +10,8 @@
         <p class="lead mb-0">Welcome, {{ user.username }}.</p>
     </div>
     <div class="d-flex flex-wrap gap-2 mt-3 mt-sm-0">
+        <a class="btn btn-outline-primary" href="{% url 'trading:portfolio' %}">Full portfolio</a>
+        <a class="btn btn-outline-primary" href="{% url 'trading:account-history' %}">Full activity</a>
         <a class="btn btn-outline-primary" href="{% url 'trading:pending-orders' %}">Pending orders</a>
         <a class="btn btn-primary" href="{% url 'market:stock-list' %}">Explore stocks</a>
     </div>

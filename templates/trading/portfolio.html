@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+
+{% block title %}Portfolio | Mock Stock Trading System{% endblock %}
+
+{% block content %}
+<section class="page-heading d-sm-flex justify-content-between align-items-end gap-3">
+    <div>
+        <p class="eyebrow mb-2">Simulated account</p>
+        <h1>Your portfolio</h1>
+        <p class="lead mb-0">Balances and current holding values for your account.</p>
+    </div>
+    <a class="btn btn-outline-primary mt-3 mt-sm-0" href="{% url 'trading:dashboard' %}">Back to dashboard</a>
+</section>
+
+{% if summary.has_portfolio %}
+    <section class="mb-4" aria-label="Portfolio summary">
+        <div class="row g-3">
+            <div class="col-sm-6 col-lg-4">
+                <article class="hero-stat-card h-100">
+                    <span class="hero-stat-label">Cash balance</span>
+                    <strong class="h3 mb-0">${{ summary.cash_balance|floatformat:"2g" }}</strong>
+                </article>
+            </div>
+            <div class="col-sm-6 col-lg-4">
+                <article class="hero-stat-card h-100">
+                    <span class="hero-stat-label">Reserved cash</span>
+                    <strong class="h3 mb-0">${{ summary.reserved_cash|floatformat:"2g" }}</strong>
+                    <span class="small text-secondary">For pending buy orders</span>
+                </article>
+            </div>
+            <div class="col-sm-6 col-lg-4">
+                <article class="hero-stat-card h-100">
+                    <span class="hero-stat-label">Available cash</span>
+                    <strong class="h3 mb-0">${{ summary.available_cash|floatformat:"2g" }}</strong>
+                    <span class="small text-secondary">Cash available for simulated activity</span>
+                </article>
+            </div>
+            <div class="col-sm-6 col-lg-4">
+                <article class="hero-stat-card h-100">
+                    <span class="hero-stat-label">Total holdings value</span>
+                    <strong class="h3 mb-0">${{ summary.holdings_value|floatformat:"2g" }}</strong>
+                    <span class="small text-secondary">Based on current stored prices</span>
+                </article>
+            </div>
+            <div class="col-sm-6 col-lg-4">
+                <article class="hero-stat-card h-100">
+                    <span class="hero-stat-label">Total account value</span>
+                    <strong class="h3 mb-0">${{ summary.total_account_value|floatformat:"2g" }}</strong>
+                    <span class="small text-secondary">Cash balance plus current holdings</span>
+                </article>
+            </div>
+        </div>
+    </section>
+
+    <section class="card content-card" aria-labelledby="portfolio-holdings-heading">
+        <div class="card-body p-4">
+            <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-3">
+                <div>
+                    <p class="eyebrow mb-1">Current positions</p>
+                    <h2 id="portfolio-holdings-heading" class="h3 mb-0">Holdings</h2>
+                </div>
+                <a class="btn btn-primary btn-sm" href="{% url 'market:stock-list' %}">Explore stocks</a>
+            </div>
+
+            {% if summary.holdings %}
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <caption class="visually-hidden">Your stock holdings and current simulated values</caption>
+                        <thead>
+                            <tr>
+                                <th scope="col">Stock</th>
+                                <th scope="col" class="text-end">Shares held</th>
+                                <th scope="col" class="text-end">Reserved</th>
+                                <th scope="col" class="text-end">Available</th>
+                                <th scope="col" class="text-end">Current price</th>
+                                <th scope="col" class="text-end">Position value</th>
+                                <th scope="col" class="text-end"><span class="visually-hidden">Actions</span></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for holding in summary.holdings %}
+                                <tr>
+                                    <td>
+                                        {% if holding.is_active %}
+                                            <a href="{% url 'market:stock-detail' holding.stock_id %}">{{ holding.symbol }}</a>
+                                        {% else %}
+                                            {{ holding.symbol }} <span class="text-secondary">(inactive)</span>
+                                        {% endif %}
+                                        <span class="d-block small text-secondary">{{ holding.company_name }}</span>
+                                    </td>
+                                    <td class="text-end">{{ holding.quantity }}</td>
+                                    <td class="text-end">{{ holding.reserved_quantity }}</td>
+                                    <td class="text-end">{{ holding.available_quantity }}</td>
+                                    <td class="text-end text-nowrap">${{ holding.current_price|floatformat:"2g" }}</td>
+                                    <td class="text-end text-nowrap">${{ holding.position_value|floatformat:"2g" }}</td>
+                                    <td class="text-end">
+                                        {% if holding.is_active and holding.available_quantity > 0 %}
+                                            <a class="btn btn-outline-primary btn-sm" href="{% url 'trading:sell' holding.stock_id %}">Sell</a>
+                                        {% else %}
+                                            <span class="small text-secondary">Unavailable</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <div class="empty-state text-center py-5">
+                    <h3 class="h5">No shares held yet</h3>
+                    <p class="text-secondary mb-0">When you complete a simulated purchase, your position will appear here.</p>
+                </div>
+            {% endif %}
+            <p class="small text-secondary mt-3 mb-0">Values use the latest simulated stock prices. No real trades or funds are involved.</p>
+        </div>
+    </section>
+{% else %}
+    <section class="empty-state text-center" aria-labelledby="portfolio-missing-heading">
+        <h2 id="portfolio-missing-heading" class="h4">No simulated portfolio is linked to this account</h2>
+        <p class="text-secondary mb-3">Your account has no cash balance or holdings to display.</p>
+        <a class="btn btn-outline-primary" href="{% url 'market:stock-list' %}">Browse available stocks</a>
+    </section>
+{% endif %}
+{% endblock %}

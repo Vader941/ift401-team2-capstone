@@ -2,14 +2,17 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db.models import DecimalField, ExpressionWrapper, F
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 from django.views.decorators.http import require_http_methods
+from zoneinfo import ZoneInfo
 
 from accounts.services import available_cash
 from market.models import Stock
 from market.services import is_market_open
 
 from .forms import BuyOrderForm, SellOrderForm
-from .models import Holding, Order, Portfolio
+from .models import CashTransaction, Holding, Order, Portfolio
+from .queries import get_account_history, get_portfolio_summary
 from .services import (
     BuyOrderError,
     CancellationError,
@@ -49,6 +52,57 @@ def dashboard(request):
             "available_cash": available,
             "holdings": holdings,
             "recent_transactions": recent_transactions,
+        },
+    )
+
+
+@login_required
+def portfolio(request):
+    summary = get_portfolio_summary(request.user)
+    return render(
+        request,
+        "trading/portfolio.html",
+        {"summary": summary},
+    )
+
+
+@login_required
+def account_history(request):
+    page = get_account_history(request.user, page=request.GET.get("page", 1))
+    transaction_labels = dict(CashTransaction.TransactionType.choices)
+    status_labels = {
+        CashTransaction.TransactionType.INITIAL_BALANCE: "Recorded",
+        CashTransaction.TransactionType.DEPOSIT: "Completed",
+        CashTransaction.TransactionType.WITHDRAWAL: "Completed",
+        CashTransaction.TransactionType.PURCHASE: "Executed",
+        CashTransaction.TransactionType.SALE: "Executed",
+        "CANCELLATION": "Cancelled",
+    }
+    eastern = ZoneInfo("America/New_York")
+    for event in page.object_list:
+        event["event_type_label"] = (
+            "Cancellation"
+            if event["event_type"] == "CANCELLATION"
+            else transaction_labels.get(
+                event["event_type"], event["event_type"]
+            )
+        )
+        event["status_label"] = status_labels.get(
+            event["event_type"], "Recorded"
+        )
+        event["local_occurred_at"] = timezone.localtime(
+            event["occurred_at"], eastern
+        )
+
+    return render(
+        request,
+        "trading/account_history.html",
+        {
+            "history_page": page,
+            "has_portfolio": Portfolio.objects.filter(
+                user=request.user
+            ).exists(),
+            "event_timezone_label": "Eastern Time (ET)",
         },
     )
 
