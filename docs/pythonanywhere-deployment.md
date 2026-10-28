@@ -156,3 +156,41 @@ stored prices when processing resumes during market hours.
 
 Price history records actual changes only. An unchanged price does not
 create a history row.
+
+## Configurable regular market schedule
+
+Administrators with the appropriate permissions can create and edit
+the regular market schedule in Django Admin.
+
+Before a configuration exists, the application uses Monday–Friday,
+9:30 a.m.–4 p.m. America/New_York. Reading these defaults does not
+create a database record.
+
+The configuration supports an IANA timezone, same-day opening and
+closing times, and Monday–Friday checkboxes. At least one weekday must
+be enabled. Weekends remain closed.
+
+Opening is inclusive; closing is exclusive. On enabled weekdays,
+date-specific full-day closures and special hours override the regular
+hours. Exceptions cannot enable a disabled weekday or weekend.
+Exception dates and daily stock-statistics dates use the configured
+market timezone.
+
+Each background cycle reads one regular schedule snapshot and uses it
+with the cycle timestamp for stock updates and pending-order evaluation.
+Regular schedule edits take effect on the next cycle without restarting
+the worker. Date-specific exceptions are queried during eligibility
+checks and are not frozen into the regular schedule snapshot.
+
+The standalone price-only command also uses one regular schedule
+snapshot per invocation. Continue to run only one background market
+worker; do not schedule the price-only command alongside it.
+
+Changing the timezone changes how future market dates are interpreted.
+Existing dated exceptions and historical daily-statistics records are
+not rewritten. Review those records before changing timezone after
+trading has begun.
+
+Deploying Python code still requires pausing the always-on task,
+waiting for successful deployment, and unpausing it. Editing schedule
+values in admin does not require a code deployment or worker restart.

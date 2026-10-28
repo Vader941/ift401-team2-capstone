@@ -313,7 +313,7 @@ def cancel_pending_order(
     return order
 
 @transaction.atomic
-def process_pending_orders(user):
+def process_pending_orders(user, *, at=None, schedule=None):
     """Evaluate a customer's pending orders, oldest first."""
     if not user.is_authenticated:
         raise CancellationError("Log in to process orders.")
@@ -325,8 +325,8 @@ def process_pending_orders(user):
     if portfolio is None:
         return []
 
-    evaluated_at = timezone.now()
-    if not is_market_open(evaluated_at):
+    evaluated_at = timezone.now() if at is None else at
+    if not is_market_open(evaluated_at, schedule=schedule):
         return []
 
     orders = list(

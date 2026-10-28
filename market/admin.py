@@ -1,7 +1,7 @@
 from django import forms
 from django.contrib import admin
 
-from .models import MarketException, PriceHistory, Stock, StockDailyStatistic
+from .models import MarketException, PriceHistory, Stock, StockDailyStatistic, MarketSchedule
 
 
 class StockCreationForm(forms.ModelForm):
@@ -144,6 +144,62 @@ class StockDailyStatisticAdmin(admin.ModelAdmin):
 
     def has_change_permission(self, request, obj=None):
         return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+@admin.register(MarketSchedule)
+class MarketScheduleAdmin(admin.ModelAdmin):
+    list_display = (
+        "timezone_name",
+        "opening_time",
+        "closing_time",
+        "updated_at",
+    )
+    readonly_fields = ("updated_at",)
+    fieldsets = (
+        (
+            "Regular trading hours",
+            {
+                "fields": (
+                    "timezone_name",
+                    "opening_time",
+                    "closing_time",
+                ),
+                "description": (
+                    "Opening is inclusive; closing is exclusive. "
+                    "Hours must begin and end on the same day. "
+                    "Date-specific exceptions override regular hours "
+                    "on permitted weekdays."
+                ),
+            },
+        ),
+        (
+            "Trading weekdays",
+            {
+                "fields": (
+                    "monday",
+                    "tuesday",
+                    "wednesday",
+                    "thursday",
+                    "friday",
+                ),
+                "description": (
+                    "Select at least one weekday. "
+                    "Saturday and Sunday are always closed."
+                ),
+            },
+        ),
+        (
+            "Record information",
+            {"fields": ("updated_at",)},
+        ),
+    )
+
+    def has_add_permission(self, request):
+        return (
+            super().has_add_permission(request)
+            and not MarketSchedule.objects.exists()
+        )
 
     def has_delete_permission(self, request, obj=None):
         return False
