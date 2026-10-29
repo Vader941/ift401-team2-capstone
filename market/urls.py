@@ -11,4 +11,9 @@ urlpatterns = [
         views.StockDetailView.as_view(),
         name="stock-detail",
     ),
+    path(
+        "stocks/<int:pk>/price-history/",
+        views.stock_price_history,
+        name="stock-price-history",
+    ),
 ]

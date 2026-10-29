@@ -1,5 +1,5 @@
 from decimal import Decimal
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone as datetime_timezone
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -7,7 +7,7 @@ from django.utils import timezone
 
 from market.models import Stock
 from trading.models import Holding, Portfolio
-from trading.queries import get_portfolio_summary
+from trading.queries import get_portfolio_summary, HistoryFilterError
 from trading.models import CashTransaction, Order
 from trading.queries import get_account_history
 
@@ -211,6 +211,87 @@ class PortfolioSummaryTests(TestCase):
             ),
             counts_before,
         )
+    def test_known_basis_exposes_unrealized_performance(self):
+        stock = self.make_stock("GAIN", "20.00")
+        Holding.objects.create(
+            portfolio=self.portfolio,
+            stock=stock,
+            quantity=15,
+            reserved_quantity=5,
+            cost_basis=Decimal("225.00"),
+        )
+
+        result = get_portfolio_summary(self.user)
+        position = result["holdings"][0]
+
+        self.assertEqual(position["cost_basis"], Decimal("225.00"))
+        self.assertEqual(position["average_cost"], Decimal("15.00"))
+        self.assertEqual(position["position_value"], Decimal("300.00"))
+        self.assertEqual(
+            position["unrealized_gain_loss"], Decimal("75.00")
+        )
+        self.assertEqual(
+            position["unrealized_gain_loss_percent"],
+            Decimal("75") / Decimal("225") * Decimal("100"),
+        )
+        self.assertFalse(result["has_unknown_cost_basis"])
+        self.assertEqual(
+            result["unrealized_gain_loss"], Decimal("75.00")
+        )
+
+    def test_unknown_basis_withholds_complete_unrealized_total(self):
+        known = self.make_stock("KNOWN", "10.00")
+        unknown = self.make_stock("UNKNOWN", "20.00")
+        Holding.objects.create(
+            portfolio=self.portfolio,
+            stock=known,
+            quantity=2,
+            cost_basis=Decimal("15.00"),
+        )
+        Holding.objects.create(
+            portfolio=self.portfolio,
+            stock=unknown,
+            quantity=3,
+            cost_basis=None,
+        )
+
+        result = get_portfolio_summary(self.user)
+        positions = {
+            item["symbol"]: item for item in result["holdings"]
+        }
+
+        self.assertTrue(result["has_unknown_cost_basis"])
+        self.assertIsNone(result["unrealized_gain_loss"])
+        self.assertEqual(
+            positions["KNOWN"]["unrealized_gain_loss"], Decimal("5.00")
+        )
+        for field in (
+            "cost_basis",
+            "average_cost",
+            "unrealized_gain_loss",
+            "unrealized_gain_loss_percent",
+        ):
+            self.assertIsNone(positions["UNKNOWN"][field])
+        self.assertEqual(result["holdings_value"], Decimal("80.00"))
+
+    def test_zero_basis_allows_dollar_gain_without_percentage(self):
+        stock = self.make_stock("ZERO", "10.00")
+        Holding.objects.create(
+            portfolio=self.portfolio,
+            stock=stock,
+            quantity=2,
+            cost_basis=Decimal("0.00"),
+        )
+
+        result = get_portfolio_summary(self.user)
+        position = result["holdings"][0]
+
+        self.assertEqual(position["average_cost"], Decimal("0.00"))
+        self.assertEqual(
+            position["unrealized_gain_loss"], Decimal("20.00")
+        )
+        self.assertIsNone(position["unrealized_gain_loss_percent"])
+        self.assertFalse(result["has_unknown_cost_basis"])
 
 class AccountHistoryTests(TestCase):
     def setUp(self):
@@ -490,3 +571,168 @@ class AccountHistoryTests(TestCase):
             all(statement.startswith("SELECT") for statement in statements),
             statements,
         )
+    def test_event_type_filters_include_only_matching_events(self):
+        examples = [
+            ("INITIAL_BALANCE", "25000.00"),
+            ("DEPOSIT", "100.00"),
+            ("WITHDRAWAL", "-50.00"),
+            ("PURCHASE", "-202.50"),
+            ("SALE", "202.50"),
+        ]
+        expected = {}
+        for event_type, amount in examples:
+            order = None
+            if event_type in ("PURCHASE", "SALE"):
+                order = self.make_order()
+                if event_type == "SALE":
+                    order.side = Order.Side.SELL
+                    order.save(update_fields=["side"])
+
+            entry = self.make_cash(event_type, amount, order=order)
+            expected[event_type] = f"cash:{entry.pk}"
+
+        cancellation = self.make_order(cancelled=True)
+        expected["CANCELLATION"] = (
+            f"cancelled_order:{cancellation.pk}"
+        )
+
+        for event_type, event_id in expected.items():
+            with self.subTest(event_type=event_type):
+                result = get_account_history(
+                    self.user, event_type=event_type
+                )
+                self.assertEqual(
+                    [event["event_id"] for event in result],
+                    [event_id],
+                )
+
+    def test_inclusive_eastern_date_handles_both_dst_transitions(self):
+        cases = [
+            # Spring forward: March 8 spans 23 hours.
+            ("2026-03-08", (2026, 3, 8, 5), (2026, 3, 9, 4)),
+            # Fall back: November 1 spans 25 hours.
+            ("2026-11-01", (2026, 11, 1, 4), (2026, 11, 2, 5)),
+        ]
+
+        for day, start_parts, end_parts in cases:
+            with self.subTest(day=day):
+                start = datetime(
+                    *start_parts, tzinfo=datetime_timezone.utc
+                )
+                end = datetime(
+                    *end_parts, tzinfo=datetime_timezone.utc
+                )
+
+                self.make_cash(
+                    "DEPOSIT", "10.00",
+                    at=start - timedelta(microseconds=1),
+                )
+                first = self.make_cash(
+                    "DEPOSIT", "20.00", at=start
+                )
+                last = self.make_cash(
+                    "DEPOSIT", "30.00",
+                    at=end - timedelta(microseconds=1),
+                )
+                self.make_cash("DEPOSIT", "40.00", at=end)
+
+                self.make_order(
+                    cancelled=True,
+                    at=start - timedelta(microseconds=1),
+                )
+                cancellation = self.make_order(
+                    cancelled=True, at=start
+                )
+                self.make_order(cancelled=True, at=end)
+
+                result = get_account_history(
+                    self.user,
+                    start_date=day,
+                    end_date=day,
+                )
+
+                self.assertEqual(
+                    {event["event_id"] for event in result},
+                    {
+                        f"cash:{first.pk}",
+                        f"cash:{last.pk}",
+                        f"cancelled_order:{cancellation.pk}",
+                    },
+                )
+
+    def test_filters_preserve_user_isolation_and_pagination(self):
+        entries = [
+            self.make_cash("DEPOSIT", "10.00")
+            for _ in range(3)
+        ]
+        self.make_cash("WITHDRAWAL", "-5.00")
+        self.make_cash(
+            "DEPOSIT", "100.00", portfolio=self.other_portfolio
+        )
+        self.make_order(cancelled=True)
+
+        first = get_account_history(
+            self.user, event_type="DEPOSIT", page=1, per_page=2
+        )
+        second = get_account_history(
+            self.user, event_type="DEPOSIT", page=2, per_page=2
+        )
+
+        self.assertEqual(first.paginator.count, 3)
+        self.assertEqual(
+            [event["event_id"] for event in first]
+            + [event["event_id"] for event in second],
+            [f"cash:{entry.pk}" for entry in reversed(entries)],
+        )
+
+        other_cancellation = self.make_order(
+            cancelled=True, portfolio=self.other_portfolio
+        )
+        cancellations = get_account_history(
+            self.user, event_type="CANCELLATION"
+        )
+        self.assertNotIn(
+            f"cancelled_order:{other_cancellation.pk}",
+            [event["event_id"] for event in cancellations],
+        )
+
+    def test_start_only_end_only_and_empty_results(self):
+        moment = datetime(
+            2026, 10, 29, 16, tzinfo=datetime_timezone.utc
+        )
+        entry = self.make_cash("DEPOSIT", "10.00", at=moment)
+
+        for filters in (
+            {"start_date": "2026-10-29"},
+            {"end_date": "2026-10-29"},
+        ):
+            with self.subTest(filters=filters):
+                result = get_account_history(self.user, **filters)
+                self.assertEqual(
+                    [event["event_id"] for event in result],
+                    [f"cash:{entry.pk}"],
+                )
+
+        empty = get_account_history(
+            self.user, start_date="2026-10-30"
+        )
+        self.assertEqual(empty.paginator.count, 0)
+        self.assertEqual(empty.number, 1)
+        self.assertEqual(list(empty), [])
+
+    def test_invalid_filters_raise_user_facing_error(self):
+        invalid_filters = [
+            {"event_type": "BUY"},
+            {"event_type": ["DEPOSIT"]},
+            {"start_date": "2026-02-30"},
+            {"start_date": "20261029"},
+            {"end_date": "10/29/2026"},
+            {"start_date": 123},
+            {"start_date": "2026-10-30", "end_date": "2026-10-29"},
+            {"end_date": "9999-12-31"},
+        ]
+
+        for filters in invalid_filters:
+            with self.subTest(filters=filters):
+                with self.assertRaises(HistoryFilterError):
+                    get_account_history(self.user, **filters)
