@@ -26,6 +26,9 @@ def get_portfolio_summary(user):
             "holdings": [],
             "has_unknown_cost_basis": False,
             "unrealized_gain_loss": None,
+            "realized_gain_loss": None,
+            "has_unknown_realized_basis": False,
+            "overall_gain_loss": None,
         }
 
     holdings = []
@@ -79,6 +82,33 @@ def get_portfolio_summary(user):
             "is_active": stock.is_active,
         })
 
+    realized_gain_loss = Decimal("0.00")
+    has_unknown_realized_basis = False
+
+    executed_sales = portfolio.orders.filter(
+        side=Order.Side.SELL,
+        status=Order.Status.EXECUTED,
+    ).values_list(
+        "quantity",
+        "execution_price",
+        "cost_basis_sold",
+    )
+
+    for quantity, execution_price, cost_basis_sold in executed_sales:
+        if execution_price is None or cost_basis_sold is None:
+            has_unknown_realized_basis = True
+        else:
+            realized_gain_loss += (
+                execution_price * quantity - cost_basis_sold
+            )
+
+    if has_unknown_realized_basis:
+        realized_gain_loss = None
+
+    overall_gain_loss = None
+    if not has_unknown_cost_basis and realized_gain_loss is not None:
+        overall_gain_loss = realized_gain_loss + unrealized_total
+
     return {
         "has_portfolio": True,
         "cash_balance": portfolio.cash_balance,
@@ -93,6 +123,9 @@ def get_portfolio_summary(user):
             None if has_unknown_cost_basis else unrealized_total
         ),
         "holdings": holdings,
+        "realized_gain_loss": realized_gain_loss,
+        "has_unknown_realized_basis": has_unknown_realized_basis,
+        "overall_gain_loss": overall_gain_loss,
     }
 
 def get_account_history(user, *, page=1, per_page=25):

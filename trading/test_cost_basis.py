@@ -10,7 +10,9 @@ from django.apps import apps
 from django.db import connection
 
 from market.models import Stock
+from accounts.services import deposit_cash, withdraw_cash
 
+from .queries import get_portfolio_summary
 from .models import Holding, Portfolio
 from .services import (
     cancel_pending_order,
@@ -278,3 +280,91 @@ class CostBasisTests(TestCase):
         self.assertEqual(sale.cost_basis_sold, Decimal("30.00"))
         self.assertEqual(self.holding().quantity, 2)
         self.assertEqual(self.holding().cost_basis, Decimal("14.00"))
+
+    def test_summary_combines_realized_and_unrealized_gain(self):
+        self.buy(10)
+        self.set_price("20.00")
+        self.buy(10)
+        self.sell(5)
+
+        result = get_portfolio_summary(self.user)
+
+        # Bought for $300; sold five for $100 with $75 allocated basis.
+        # Remaining shares are worth $300 with $225 remaining basis.
+        self.assertEqual(
+            result["realized_gain_loss"], Decimal("25.00")
+        )
+        self.assertEqual(
+            result["unrealized_gain_loss"], Decimal("75.00")
+        )
+        self.assertEqual(
+            result["overall_gain_loss"], Decimal("100.00")
+        )
+        self.assertFalse(result["has_unknown_realized_basis"])
+        self.assertEqual(
+            result["total_account_value"], Decimal("25100.00")
+        )
+
+    def test_funding_changes_do_not_change_investment_gain(self):
+        self.buy(10)
+        self.set_price("12.00")
+        self.sell(4)
+
+        before = get_portfolio_summary(self.user)
+        deposit_cash(self.user, Decimal("500.00"))
+        withdraw_cash(self.user, Decimal("200.00"))
+        after = get_portfolio_summary(self.user)
+
+        self.assertEqual(
+            after["total_account_value"],
+            before["total_account_value"] + Decimal("300.00"),
+        )
+        for field in (
+            "realized_gain_loss",
+            "unrealized_gain_loss",
+            "overall_gain_loss",
+        ):
+            self.assertEqual(after[field], before[field])
+
+        self.assertEqual(
+            after["overall_gain_loss"], Decimal("20.00")
+        )
+
+    def test_unknown_historical_sale_withholds_overall_gain(self):
+        self.buy(5)
+        sale = self.sell(5)
+        self.portfolio.orders.filter(pk=sale.pk).update(
+            cost_basis_sold=None
+        )
+
+        # A reopened position has known basis, but the old sale does not.
+        self.buy(2)
+        result = get_portfolio_summary(self.user)
+
+        self.assertFalse(result["has_unknown_cost_basis"])
+        self.assertTrue(result["has_unknown_realized_basis"])
+        self.assertIsNone(result["realized_gain_loss"])
+        self.assertIsNone(result["overall_gain_loss"])
+        self.assertEqual(
+            result["unrealized_gain_loss"], Decimal("0.00")
+        )
+
+    def test_pending_and_cancelled_sales_do_not_count_as_realized(self):
+        self.buy(10)
+        self.set_price("12.00")
+        cancelled = self.sell(2, market_open=False)
+        cancel_pending_order(self.user, cancelled.pk)
+        self.sell(3, market_open=False)
+
+        result = get_portfolio_summary(self.user)
+
+        self.assertEqual(
+            result["realized_gain_loss"], Decimal("0.00")
+        )
+        self.assertEqual(
+            result["unrealized_gain_loss"], Decimal("20.00")
+        )
+        self.assertEqual(
+            result["overall_gain_loss"], Decimal("20.00")
+        )
+        self.assertFalse(result["has_unknown_realized_basis"])
