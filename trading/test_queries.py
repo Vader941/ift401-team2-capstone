@@ -211,6 +211,87 @@ class PortfolioSummaryTests(TestCase):
             ),
             counts_before,
         )
+    def test_known_basis_exposes_unrealized_performance(self):
+        stock = self.make_stock("GAIN", "20.00")
+        Holding.objects.create(
+            portfolio=self.portfolio,
+            stock=stock,
+            quantity=15,
+            reserved_quantity=5,
+            cost_basis=Decimal("225.00"),
+        )
+
+        result = get_portfolio_summary(self.user)
+        position = result["holdings"][0]
+
+        self.assertEqual(position["cost_basis"], Decimal("225.00"))
+        self.assertEqual(position["average_cost"], Decimal("15.00"))
+        self.assertEqual(position["position_value"], Decimal("300.00"))
+        self.assertEqual(
+            position["unrealized_gain_loss"], Decimal("75.00")
+        )
+        self.assertEqual(
+            position["unrealized_gain_loss_percent"],
+            Decimal("75") / Decimal("225") * Decimal("100"),
+        )
+        self.assertFalse(result["has_unknown_cost_basis"])
+        self.assertEqual(
+            result["unrealized_gain_loss"], Decimal("75.00")
+        )
+
+    def test_unknown_basis_withholds_complete_unrealized_total(self):
+        known = self.make_stock("KNOWN", "10.00")
+        unknown = self.make_stock("UNKNOWN", "20.00")
+        Holding.objects.create(
+            portfolio=self.portfolio,
+            stock=known,
+            quantity=2,
+            cost_basis=Decimal("15.00"),
+        )
+        Holding.objects.create(
+            portfolio=self.portfolio,
+            stock=unknown,
+            quantity=3,
+            cost_basis=None,
+        )
+
+        result = get_portfolio_summary(self.user)
+        positions = {
+            item["symbol"]: item for item in result["holdings"]
+        }
+
+        self.assertTrue(result["has_unknown_cost_basis"])
+        self.assertIsNone(result["unrealized_gain_loss"])
+        self.assertEqual(
+            positions["KNOWN"]["unrealized_gain_loss"], Decimal("5.00")
+        )
+        for field in (
+            "cost_basis",
+            "average_cost",
+            "unrealized_gain_loss",
+            "unrealized_gain_loss_percent",
+        ):
+            self.assertIsNone(positions["UNKNOWN"][field])
+        self.assertEqual(result["holdings_value"], Decimal("80.00"))
+
+    def test_zero_basis_allows_dollar_gain_without_percentage(self):
+        stock = self.make_stock("ZERO", "10.00")
+        Holding.objects.create(
+            portfolio=self.portfolio,
+            stock=stock,
+            quantity=2,
+            cost_basis=Decimal("0.00"),
+        )
+
+        result = get_portfolio_summary(self.user)
+        position = result["holdings"][0]
+
+        self.assertEqual(position["average_cost"], Decimal("0.00"))
+        self.assertEqual(
+            position["unrealized_gain_loss"], Decimal("20.00")
+        )
+        self.assertIsNone(position["unrealized_gain_loss_percent"])
+        self.assertFalse(result["has_unknown_cost_basis"])
 
 class AccountHistoryTests(TestCase):
     def setUp(self):

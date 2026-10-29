@@ -24,10 +24,14 @@ def get_portfolio_summary(user):
             "holdings_value": None,
             "total_account_value": None,
             "holdings": [],
+            "has_unknown_cost_basis": False,
+            "unrealized_gain_loss": None,
         }
 
     holdings = []
     holdings_value = Decimal("0.00")
+    unrealized_total = Decimal("0.00")
+    has_unknown_cost_basis = False
 
     positions = (
         portfolio.holdings
@@ -40,6 +44,22 @@ def get_portfolio_summary(user):
         stock = holding.stock
         position_value = stock.current_price * holding.quantity
         holdings_value += position_value
+        cost_basis = holding.cost_basis
+        average_cost = None
+        unrealized_gain_loss = None
+        unrealized_gain_loss_percent = None
+
+        if cost_basis is None:
+            has_unknown_cost_basis = True
+        else:
+            average_cost = cost_basis / holding.quantity
+            unrealized_gain_loss = position_value - cost_basis
+            unrealized_total += unrealized_gain_loss
+
+            if cost_basis > 0:
+                unrealized_gain_loss_percent = (
+                    unrealized_gain_loss / cost_basis * Decimal("100")
+                )
 
         holdings.append({
             "stock_id": stock.pk,
@@ -52,6 +72,10 @@ def get_portfolio_summary(user):
             ),
             "current_price": stock.current_price,
             "position_value": position_value,
+            "cost_basis": cost_basis,
+            "average_cost": average_cost,
+            "unrealized_gain_loss": unrealized_gain_loss,
+            "unrealized_gain_loss_percent": unrealized_gain_loss_percent,
             "is_active": stock.is_active,
         })
 
@@ -63,6 +87,10 @@ def get_portfolio_summary(user):
         "holdings_value": holdings_value,
         "total_account_value": (
             portfolio.cash_balance + holdings_value
+        ),
+        "has_unknown_cost_basis": has_unknown_cost_basis,
+        "unrealized_gain_loss": (
+            None if has_unknown_cost_basis else unrealized_total
         ),
         "holdings": holdings,
     }
