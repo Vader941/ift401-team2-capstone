@@ -2,6 +2,8 @@ from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 from django.test import TestCase
+from django.contrib.auth import get_user_model
+from django.urls import reverse
 
 from market.models import PriceHistory, Stock
 from market.queries import get_stock_price_history
@@ -120,6 +122,118 @@ class StockPriceHistoryQueryTests(TestCase):
 
         get_stock_price_history(self.stock)
         get_stock_price_history(self.stock)
+
+        after = {
+            model._meta.label: list(
+                model.objects.order_by("pk").values()
+            )
+            for model in models
+        }
+        self.assertEqual(after, before)
+
+class StockPriceHistoryEndpointTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="graph_customer"
+        )
+        self.stock = Stock.objects.create(
+            symbol="HTTP",
+            company_name="HTTP Graph Test",
+            initial_price=Decimal("10.00"),
+            current_price=Decimal("11.00"),
+            is_active=True,
+        )
+        self.observation = PriceHistory.objects.create(
+            stock=self.stock,
+            previous_price=Decimal("10.00"),
+            new_price=Decimal("11.00"),
+            percentage_change=Decimal("10.0000"),
+            effective_at=datetime(
+                2026, 10, 29, 16, tzinfo=timezone.utc
+            ),
+        )
+        self.url = reverse(
+            "market:stock-price-history",
+            kwargs={"pk": self.stock.pk},
+        )
+
+    def test_login_is_required(self):
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("next=", response.url)
+
+    def test_authenticated_get_returns_query_payload(self):
+        self.client.force_login(self.user)
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response["Content-Type"], "application/json"
+        )
+        self.assertEqual(response["Cache-Control"], "no-store")
+        self.assertEqual(
+            response.json(),
+            get_stock_price_history(self.stock),
+        )
+
+    def test_post_is_rejected(self):
+        self.client.force_login(self.user)
+
+        response = self.client.post(self.url)
+
+        self.assertEqual(response.status_code, 405)
+
+    def test_inactive_and_missing_stocks_return_404(self):
+        self.client.force_login(self.user)
+        Stock.objects.filter(pk=self.stock.pk).update(is_active=False)
+
+        self.assertEqual(
+            self.client.get(self.url).status_code, 404
+        )
+
+        missing_url = reverse(
+            "market:stock-price-history",
+            kwargs={"pk": self.stock.pk + 1000},
+        )
+        self.assertEqual(
+            self.client.get(missing_url).status_code, 404
+        )
+
+    def test_refreshes_do_not_change_market_or_account_records(self):
+        portfolio = Portfolio.objects.create(user=self.user)
+        Order.objects.create(
+            portfolio=portfolio,
+            stock=self.stock,
+            side=Order.Side.BUY,
+            status=Order.Status.PENDING,
+            quantity=1,
+            submission_price=Decimal("11.00"),
+            reserved_cash=Decimal("11.00"),
+        )
+        Portfolio.objects.filter(pk=portfolio.pk).update(
+            reserved_cash=Decimal("11.00")
+        )
+        self.client.force_login(self.user)
+
+        models = (
+            PriceHistory,
+            Stock,
+            Order,
+            CashTransaction,
+            Portfolio,
+        )
+        before = {
+            model._meta.label: list(
+                model.objects.order_by("pk").values()
+            )
+            for model in models
+        }
+
+        for _ in range(2):
+            response = self.client.get(self.url)
+            self.assertEqual(response.status_code, 200)
 
         after = {
             model._meta.label: list(
