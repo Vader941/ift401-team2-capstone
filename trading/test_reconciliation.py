@@ -422,6 +422,10 @@ class CashAndTradeScenarioTests(ReconciliationMixin, TestCase):
                 "available_quantity": 6,
                 "current_price": Decimal("25.00"),
                 "position_value": Decimal("250.00"),
+                "cost_basis": Decimal("250.00"),
+                "average_cost": Decimal("25.00"),
+                "unrealized_gain_loss": Decimal("0.00"),
+                "unrealized_gain_loss_percent": Decimal("0"),
                 "is_active": True,
             }],
         )
