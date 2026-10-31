@@ -8,10 +8,42 @@
         <p class="eyebrow mb-2">Simulated account</p>
         <h1>Account activity</h1>
         <p class="lead mb-0">Your deposits, withdrawals, executed trades, and cancelled orders.</p>
+        <p class="small text-secondary mb-0 mt-2">All dates and times are displayed in Eastern Time (ET).</p>
     </div>
     <div class="d-flex flex-wrap gap-2 mt-3 mt-sm-0">
         <a class="btn btn-outline-primary" href="{% url 'trading:pending-orders' %}">View pending orders</a>
         <a class="btn btn-outline-primary" href="{% url 'trading:dashboard' %}">Back to dashboard</a>
+    </div>
+</section>
+
+<section class="card content-card mb-4" aria-labelledby="activity-filter-heading">
+    <div class="card-body p-4">
+        <h2 id="activity-filter-heading" class="h4">Filter activity</h2>
+        {% if filter_error %}<p class="alert alert-danger" role="alert">{{ filter_error }}</p>{% endif %}
+        <form method="get" action="{% url 'trading:account-history' %}" class="row g-3 align-items-end">
+            <div class="col-12 col-md-4">
+                <label class="form-label" for="activity-type">Activity type</label>
+                <select class="form-select" id="activity-type" name="event_type">
+                    <option value="">All activity</option>
+                    {% for value, label in event_type_choices.items %}
+                        <option value="{{ value }}" {% if selected_type == value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-6 col-md-3">
+                <label class="form-label" for="activity-start">Start date (ET)</label>
+                <input class="form-control" id="activity-start" name="start_date" type="date" value="{{ start_date }}">
+            </div>
+            <div class="col-6 col-md-3">
+                <label class="form-label" for="activity-end">End date (ET)</label>
+                <input class="form-control" id="activity-end" name="end_date" type="date" value="{{ end_date }}">
+            </div>
+            <div class="col-12 col-md-2 d-flex gap-2">
+                <button class="btn btn-primary" type="submit">Apply</button>
+                <a class="btn btn-outline-secondary" href="{% url 'trading:account-history' %}">Reset</a>
+            </div>
+        </form>
+        {% if selected_type or start_date or end_date %}<p class="small text-secondary mt-3 mb-0">Filters active{% if selected_type %}: {{ selected_type_label }}{% endif %}{% if start_date %} · from {{ start_date }}{% endif %}{% if end_date %} · through {{ end_date }}{% endif %}</p>{% endif %}
     </div>
 </section>
 
@@ -41,7 +73,7 @@
                     <tbody>
                         {% for event in history_page.object_list %}
                             <tr>
-                                <td class="text-nowrap"><time datetime="{{ event.local_occurred_at|date:'c' }}">{{ event.local_occurred_at|date:"M j, Y, g:i a" }} ET</time></td>
+                                <td class="text-nowrap"><time datetime="{{ event.local_occurred_at|date:'c' }}">{{ event.local_occurred_at|date:"M j, Y, g:i a" }} {{ event.timezone_abbr }}</time></td>
                                 <td>{{ event.event_type_label }}</td>
                                 <td>
                                     {% if event.symbol %}
@@ -69,13 +101,13 @@
             {% if history_page.paginator.num_pages > 1 %}
                 <nav class="d-flex justify-content-between align-items-center gap-3 mt-4" aria-label="Account activity pages">
                     {% if history_page.has_previous %}
-                        <a class="btn btn-outline-primary btn-sm" href="?page={{ history_page.previous_page_number }}">Previous</a>
+                        <a class="btn btn-outline-primary btn-sm" href="?{% if selected_type %}event_type={{ selected_type|urlencode }}&amp;{% endif %}{% if start_date %}start_date={{ start_date|urlencode }}&amp;{% endif %}{% if end_date %}end_date={{ end_date|urlencode }}&amp;{% endif %}page={{ history_page.previous_page_number }}">Previous</a>
                     {% else %}
                         <span></span>
                     {% endif %}
                     <span class="small text-secondary">Page {{ history_page.number }} of {{ history_page.paginator.num_pages }}</span>
                     {% if history_page.has_next %}
-                        <a class="btn btn-outline-primary btn-sm" href="?page={{ history_page.next_page_number }}">Next</a>
+                        <a class="btn btn-outline-primary btn-sm" href="?{% if selected_type %}event_type={{ selected_type|urlencode }}&amp;{% endif %}{% if start_date %}start_date={{ start_date|urlencode }}&amp;{% endif %}{% if end_date %}end_date={{ end_date|urlencode }}&amp;{% endif %}page={{ history_page.next_page_number }}">Next</a>
                     {% else %}
                         <span></span>
                     {% endif %}
@@ -83,6 +115,17 @@
             {% endif %}
             <p class="small text-secondary mt-3 mb-0">All amounts and activity are part of a no-real-money simulation.</p>
         </div>
+    </section>
+{% elif filter_error %}
+    <section class="empty-state text-center" aria-labelledby="history-filter-error-heading">
+        <h2 id="history-filter-error-heading" class="h4">Correct the filters to view activity</h2>
+        <p class="text-secondary mb-3">Your submitted filters were not applied.</p>
+    </section>
+{% elif selected_type or start_date or end_date %}
+    <section class="empty-state text-center" aria-labelledby="history-filter-empty-heading">
+        <h2 id="history-filter-empty-heading" class="h4">No activity matches these filters</h2>
+        <p class="text-secondary mb-3">Try another activity type or date range.</p>
+        <a class="btn btn-outline-primary" href="{% url 'trading:account-history' %}">Clear filters</a>
     </section>
 {% else %}
     <section class="empty-state text-center" aria-labelledby="history-empty-heading">

@@ -1,11 +1,63 @@
 """Read-only, account-scoped portfolio and history queries."""
 
 from decimal import Decimal
+from datetime import date, datetime, time, timedelta, timezone as datetime_timezone
+from zoneinfo import ZoneInfo
 
 from accounts.services import available_cash
 from trading.models import Portfolio, CashTransaction, Order
 
 from django.core.paginator import Paginator
+
+HISTORY_EVENT_TYPES = frozenset(
+    value for value, _ in CashTransaction.TransactionType.choices
+) | {"CANCELLATION"}
+HISTORY_TIMEZONE = ZoneInfo("America/New_York")
+
+
+class HistoryFilterError(ValueError):
+    """Invalid account-history filter with a user-facing explanation."""
+
+
+def _history_filter_bounds(event_type, start_date, end_date):
+    if event_type is None:
+        event_type = ""
+    if not isinstance(event_type, str) or (event_type and event_type not in HISTORY_EVENT_TYPES):
+        raise HistoryFilterError("Choose a valid activity type.")
+
+    def parse_date(value, label):
+        if value in (None, ""):
+            return None
+        if not isinstance(value, str):
+            raise HistoryFilterError(f"{label} must use YYYY-MM-DD.")
+        try:
+            parsed = date.fromisoformat(value)
+        except ValueError:
+            raise HistoryFilterError(
+                f"{label} must be a valid date in YYYY-MM-DD format."
+            ) from None
+        if parsed.isoformat() != value:
+            raise HistoryFilterError(f"{label} must use YYYY-MM-DD.")
+        return parsed
+
+    start = parse_date(start_date, "Start date")
+    end = parse_date(end_date, "End date")
+    if start and end and start > end:
+        raise HistoryFilterError("Start date must be on or before end date.")
+    try:
+        start_at = (
+            datetime.combine(start, time.min, tzinfo=HISTORY_TIMEZONE)
+            .astimezone(datetime_timezone.utc)
+            if start else None
+        )
+        end_before = (
+            datetime.combine(end + timedelta(days=1), time.min, tzinfo=HISTORY_TIMEZONE)
+            .astimezone(datetime_timezone.utc)
+            if end else None
+        )
+    except (OverflowError, ValueError):
+        raise HistoryFilterError("Choose dates within the supported calendar range.") from None
+    return event_type, start_at, end_before
 
 def get_portfolio_summary(user):
     """Return the user's balances and holdings without changing data.
@@ -67,7 +119,9 @@ def get_portfolio_summary(user):
         "holdings": holdings,
     }
 
-def get_account_history(user, *, page=1, per_page=25):
+def get_account_history(
+    user, *, page=1, per_page=25, event_type="", start_date=None, end_date=None
+):
     """Return a paginated, newest-first history for the user's account.
 
     Executed trades appear through cash transactions only.
@@ -80,6 +134,9 @@ def get_account_history(user, *, page=1, per_page=25):
         or per_page < 1
     ):
         raise ValueError("per_page must be a positive integer.")
+    event_type, start_at, end_before = _history_filter_bounds(
+        event_type, start_date, end_date
+    )
 
     events = []
 
@@ -88,6 +145,14 @@ def get_account_history(user, *, page=1, per_page=25):
         .filter(portfolio__user=user)
         .select_related("order__stock")
     )
+    if event_type == "CANCELLATION":
+        cash_transactions = cash_transactions.none()
+    elif event_type:
+        cash_transactions = cash_transactions.filter(transaction_type=event_type)
+    if start_at is not None:
+        cash_transactions = cash_transactions.filter(created_at__gte=start_at)
+    if end_before is not None:
+        cash_transactions = cash_transactions.filter(created_at__lt=end_before)
 
     for entry in cash_transactions:
         order = entry.order
@@ -121,6 +186,12 @@ def get_account_history(user, *, page=1, per_page=25):
         )
         .select_related("stock")
     )
+    if event_type and event_type != "CANCELLATION":
+        cancelled_orders = cancelled_orders.none()
+    if start_at is not None:
+        cancelled_orders = cancelled_orders.filter(cancelled_at__gte=start_at)
+    if end_before is not None:
+        cancelled_orders = cancelled_orders.filter(cancelled_at__lt=end_before)
 
     for order in cancelled_orders:
         if order.cancelled_at is None:

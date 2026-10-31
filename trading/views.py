@@ -1,5 +1,6 @@
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.paginator import Paginator
 from django.db.models import DecimalField, ExpressionWrapper, F
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -12,7 +13,11 @@ from market.services import is_market_open
 
 from .forms import BuyOrderForm, SellOrderForm
 from .models import CashTransaction, Holding, Order, Portfolio
-from .queries import get_account_history, get_portfolio_summary
+from .queries import (
+    HistoryFilterError,
+    get_account_history,
+    get_portfolio_summary,
+)
 from .services import (
     BuyOrderError,
     CancellationError,
@@ -42,18 +47,21 @@ def dashboard(request):
         reserved_cash = portfolio.reserved_cash
         available = available_cash(portfolio)
 
-    return render(
-        request,
-        "trading/dashboard.html",
-        {
-            "portfolio": portfolio,
-            "cash_balance": cash_balance,
-            "reserved_cash": reserved_cash,
-            "available_cash": available,
-            "holdings": holdings,
-            "recent_transactions": recent_transactions,
-        },
-    )
+    eastern = ZoneInfo("America/New_York")
+    for entry in recent_transactions:
+        entry.local_created_at = timezone.localtime(entry.created_at, eastern)
+        entry.timezone_abbr = entry.local_created_at.tzname()
+
+    context = {
+        "portfolio": portfolio,
+        "cash_balance": cash_balance,
+        "reserved_cash": reserved_cash,
+        "available_cash": available,
+        "holdings": holdings,
+        "recent_transactions": recent_transactions,
+    }
+    with timezone.override(eastern):
+        return render(request, "trading/dashboard.html", context)
 
 
 @login_required
@@ -68,7 +76,24 @@ def portfolio(request):
 
 @login_required
 def account_history(request):
-    page = get_account_history(request.user, page=request.GET.get("page", 1))
+    eastern = ZoneInfo("America/New_York")
+    allowed_types = dict(CashTransaction.TransactionType.choices)
+    allowed_types["CANCELLATION"] = "Cancellation"
+    selected_type = request.GET.get("event_type", "").strip()
+    start_text = request.GET.get("start_date", "").strip()
+    end_text = request.GET.get("end_date", "").strip()
+    filter_error = ""
+    try:
+        page = get_account_history(
+            request.user,
+            page=request.GET.get("page", 1),
+            event_type=selected_type,
+            start_date=start_text,
+            end_date=end_text,
+        )
+    except HistoryFilterError as exc:
+        filter_error = str(exc)
+        page = Paginator([], 25).get_page(1)
     transaction_labels = dict(CashTransaction.TransactionType.choices)
     status_labels = {
         CashTransaction.TransactionType.INITIAL_BALANCE: "Recorded",
@@ -78,7 +103,6 @@ def account_history(request):
         CashTransaction.TransactionType.SALE: "Executed",
         "CANCELLATION": "Cancelled",
     }
-    eastern = ZoneInfo("America/New_York")
     for event in page.object_list:
         event["event_type_label"] = (
             "Cancellation"
@@ -93,18 +117,21 @@ def account_history(request):
         event["local_occurred_at"] = timezone.localtime(
             event["occurred_at"], eastern
         )
+        event["timezone_abbr"] = event["local_occurred_at"].tzname()
 
-    return render(
-        request,
-        "trading/account_history.html",
-        {
-            "history_page": page,
-            "has_portfolio": Portfolio.objects.filter(
-                user=request.user
-            ).exists(),
-            "event_timezone_label": "Eastern Time (ET)",
-        },
-    )
+    context = {
+        "history_page": page,
+        "has_portfolio": Portfolio.objects.filter(user=request.user).exists(),
+        "event_timezone_label": "Eastern Time (ET)",
+        "event_type_choices": allowed_types,
+        "selected_type": selected_type,
+        "selected_type_label": allowed_types.get(selected_type, ""),
+        "start_date": start_text,
+        "end_date": end_text,
+        "filter_error": filter_error,
+    }
+    with timezone.override(eastern):
+        return render(request, "trading/account_history.html", context)
 
 
 @login_required
@@ -265,11 +292,17 @@ def pending_orders(request):
             )
             .order_by("-created_at", "-pk")
         )
-    return render(
-        request,
-        "trading/pending_orders.html",
-        {"orders": orders, "portfolio": portfolio},
-    )
+    eastern = ZoneInfo("America/New_York")
+    for order in orders:
+        order.local_created_at = timezone.localtime(order.created_at, eastern)
+        order.timezone_abbr = order.local_created_at.tzname()
+    context = {
+        "orders": orders,
+        "portfolio": portfolio,
+        "event_timezone_label": "Eastern Time (ET)",
+    }
+    with timezone.override(eastern):
+        return render(request, "trading/pending_orders.html", context)
 
 
 @login_required
