@@ -87,6 +87,16 @@ body {
 
 .sale-estimate { font-variant-numeric: tabular-nums; font-weight: 600; }
 
+.price-chart-wrap { min-width: 0; overflow-x: auto; }
+.price-chart { display: block; height: auto; min-height: 13rem; width: 100%; }
+.chart-grid { stroke: #dce4ef; stroke-width: 1; }
+.chart-axis { stroke: #607086; stroke-width: 1.5; }
+.chart-axis-label { fill: #526176; font-size: 12px; }
+.chart-title { fill: #344054; font-size: 13px; font-weight: 600; }
+.chart-line { fill: none; stroke: #1d5fd1; stroke-linecap: round; stroke-linejoin: round; stroke-width: 3; }
+.chart-point { fill: #1d5fd1; stroke: #fff; stroke-width: 2; }
+.chart-empty { fill: #526176; font-size: 16px; }
+
 .form-card form p { margin-bottom: 1.25rem; }
 .form-card label { display: block; font-weight: 600; margin-bottom: .4rem; }
 .form-card input { border: 1px solid #98a7bc; border-radius: .375rem; display: block; padding: .5rem .75rem; width: 100%; }

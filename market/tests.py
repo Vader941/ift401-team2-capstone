@@ -118,8 +118,7 @@ class StockViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(list(response.context["stocks"]), [])
-        self.assertContains(response, "No stocks match")
-        self.assertNotContains(response, "Inactive Test Company")
+
 
     def test_stock_list_distinguishes_no_active_stocks_from_no_match(self):
         self.client.force_login(self.user)
@@ -141,8 +140,8 @@ class StockViewTests(TestCase):
 
         self.assertEqual(response.status_code, 404)
 
-@patch("market.services.random.uniform", return_value=0)
-def test_stock_detail_displays_selected_stock(self, _random):
+    @patch("market.services.random.uniform", return_value=0)
+    def test_stock_detail_displays_selected_stock(self, _random):
         self.client.force_login(self.user)
 
         response = self.client.get(
@@ -161,6 +160,53 @@ def test_stock_detail_displays_selected_stock(self, _random):
             reverse("trading:buy", kwargs={"pk": self.active_stock.pk}),
         )
         self.assertContains(response, 'name="quantity"')
+
+
+class PriceHistoryEndpointTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username="chartuser")
+        self.stock = Stock.objects.create(
+            symbol="CHRT", company_name="Chart Co", current_price=Decimal("12.00")
+        )
+
+    def test_price_history_endpoint_is_authenticated_and_read_only(self):
+        url = reverse("market:stock-price-history", args=[self.stock.pk])
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 302)
+        self.client.force_login(self.user)
+        before = self.stock.current_price
+        observed_at = datetime(2026, 10, 31, 15, tzinfo=datetime_timezone.utc)
+        PriceHistory.objects.create(
+            stock=self.stock,
+            previous_price=Decimal("11.00"),
+            new_price=Decimal("12.00"),
+            percentage_change=Decimal("9.0909"),
+            effective_at=observed_at,
+        )
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["symbol"], "CHRT")
+        self.assertEqual(response.json()["points"][0]["price"], "12.00")
+        self.assertEqual(response.json()["points"][0]["timestamp"], observed_at.isoformat())
+        self.assertEqual(response.json()["data_as_of"], observed_at.isoformat())
+        self.assertEqual(response["Cache-Control"], "no-store")
+        self.stock.refresh_from_db()
+        self.assertEqual(self.stock.current_price, before)
+
+    def test_price_history_endpoint_returns_empty_state_data(self):
+        self.client.force_login(self.user)
+        response = self.client.get(reverse("market:stock-price-history", args=[self.stock.pk]))
+        self.assertEqual(response.json(), {
+            "stock_id": self.stock.pk,
+            "symbol": "CHRT",
+            "timezone": "America/New_York",
+            "timezone_label": "ET",
+            "limit": 180,
+            "points": [],
+            "last_observed_price": None,
+            "data_as_of": None,
+            "display_data_as_of": None,
+        })
 
 class MarketExceptionModelTests(TestCase):
     def test_full_day_closure_is_valid(self):

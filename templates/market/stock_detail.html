@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block title %}{{ stock.symbol }} | Mock Stock Trading System{% endblock %}
 
@@ -69,6 +70,32 @@
             </div>
         </dl>
         {% endwith %}
+
+        <section class="card content-card mt-4" aria-labelledby="price-history-heading" data-stock-id="{{ stock.pk }}" data-price-history-endpoint="{% url 'market:stock-price-history' stock.pk %}">
+            <div class="card-body p-3 p-md-4">
+                <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
+                    <div>
+                        <h2 id="price-history-heading" class="h4 mb-1">{{ stock.symbol }} price history</h2>
+                        <p id="price-history-as-of" class="small text-secondary mb-0" aria-live="polite">As of — ET</p>
+                    </div>
+                    <button class="btn btn-outline-primary" type="button" id="price-history-refresh" aria-controls="price-history-chart">Refresh chart</button>
+                </div>
+                <p id="price-history-status" class="small text-secondary" role="status" aria-live="polite">Loading recorded observations…</p>
+                <div class="price-chart-wrap" id="price-history-chart" role="img" aria-label="{{ stock.symbol }} simulated price history chart">
+                    <svg class="price-chart" viewBox="0 0 800 320" preserveAspectRatio="none" aria-hidden="true"></svg>
+                </div>
+                <p class="small text-secondary mt-2 mb-0">This chart shows stored simulated observations. Refresh checks for recorded data and does not generate prices.</p>
+                <div class="table-responsive mt-3">
+                    <table class="table table-sm mb-0">
+                        <caption class="visually-hidden">Recorded {{ stock.symbol }} prices with Eastern observation times</caption>
+                        <thead><tr><th scope="col">Observed (ET)</th><th scope="col" class="text-end">Price (USD)</th></tr></thead>
+                        <tbody id="price-history-table-body"><tr><td colspan="2">Loading observations…</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <script src="{% static 'js/price-history.js' %}" defer></script>
 
         <section class="buy-entry mt-4 pt-4 border-top" aria-labelledby="buy-heading">
             <h2 id="buy-heading" class="h4">Buy this stock</h2>
