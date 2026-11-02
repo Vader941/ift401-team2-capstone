@@ -118,6 +118,8 @@ class StockViewTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(list(response.context["stocks"]), [])
+        self.assertContains(response, "No stocks match")
+        self.assertNotContains(response, "Inactive Test Company")
 
 
     def test_stock_list_distinguishes_no_active_stocks_from_no_match(self):
