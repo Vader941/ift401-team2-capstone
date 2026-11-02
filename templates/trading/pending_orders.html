@@ -8,6 +8,7 @@
         <p class="eyebrow mb-2">Simulated account</p>
         <h1>Pending orders</h1>
         <p class="text-secondary mb-0">Review orders waiting for the next eligible market session.</p>
+        <p class="small text-secondary mb-0 mt-2">All dates and times are displayed in Eastern Time (ET).</p>
     </div>
     <a class="btn btn-outline-primary mt-3 mt-sm-0" href="{% url 'trading:dashboard' %}">Back to dashboard</a>
 </section>
@@ -30,7 +31,7 @@
                 <tbody>
                     {% for order in orders %}
                         <tr>
-                            <td class="text-nowrap"><time datetime="{{ order.created_at|date:'c' }}">{{ order.created_at|date:"M j, Y, g:i A" }}</time></td>
+                            <td class="text-nowrap"><time datetime="{{ order.local_created_at|date:'c' }}">{{ order.local_created_at|date:"M j, Y, g:i a" }} {{ order.timezone_abbr }}</time></td>
                             <td>
                                 <strong>{{ order.stock.symbol }}</strong>
                                 <span class="d-block small text-secondary">{{ order.stock.company_name }}</span>

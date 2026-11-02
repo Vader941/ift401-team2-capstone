@@ -1,5 +1,6 @@
 from decimal import Decimal
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone as dt_timezone
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -66,6 +67,7 @@ class PortfolioAndHistoryViewTests(TestCase):
         self.assertContains(response, "LIVE")
         self.assertContains(response, "OLD")
         self.assertContains(response, "13.25")
+        self.assertContains(response, "Basis unavailable")
         self.assertContains(
             response,
             reverse("trading:sell", args=[self.active_stock.pk]),
@@ -94,6 +96,42 @@ class PortfolioAndHistoryViewTests(TestCase):
         self.assertEqual(response.context["summary"]["holdings"], [])
         self.assertNotContains(response, "90,000.00")
         self.assertNotContains(response, "99 shares")
+
+    @patch("trading.views.get_portfolio_summary")
+    def test_portfolio_renders_contract_performance_fields(self, summary_query):
+        summary_query.return_value = {
+            "has_portfolio": True,
+            "cash_balance": Decimal("20000.00"),
+            "reserved_cash": Decimal("0.00"),
+            "available_cash": Decimal("20000.00"),
+            "holdings_value": Decimal("300.00"),
+            "total_account_value": Decimal("20300.00"),
+            "has_unknown_cost_basis": False,
+            "has_unknown_realized_basis": False,
+            "realized_gain_loss": Decimal("25.00"),
+            "unrealized_gain_loss": Decimal("75.00"),
+            "overall_gain_loss": Decimal("100.00"),
+            "holdings": [{
+                "stock_id": self.active_stock.pk,
+                "symbol": "LIVE",
+                "company_name": "Live Company",
+                "quantity": 15,
+                "reserved_quantity": 0,
+                "available_quantity": 15,
+                "current_price": Decimal("20.00"),
+                "position_value": Decimal("300.00"),
+                "average_cost": Decimal("15.00"),
+                "unrealized_gain_loss": Decimal("75.00"),
+                "unrealized_gain_loss_percent": Decimal("33.333333"),
+                "is_active": True,
+            }],
+        }
+        response = self.client.get(reverse("trading:portfolio"))
+        self.assertContains(response, "$15.00")
+        self.assertContains(response, "Gain +$75.00")
+        self.assertContains(response, "Gain +33.33%")
+        self.assertContains(response, "+$100.00")
+        self.assertContains(response, "Realized plus unrealized")
 
     def test_missing_portfolio_has_clear_empty_state(self):
         missing_user = get_user_model().objects.create_user(
@@ -231,6 +269,82 @@ class PortfolioAndHistoryViewTests(TestCase):
         self.assertContains(first, "?page=2")
         self.assertEqual(invalid.context["history_page"].number, 1)
 
+    def test_history_filters_by_type_and_eastern_date_and_preserves_pagination(self):
+        # UTC 03:30 is the prior calendar date in New York during EDT.
+        at = datetime(2026, 10, 30, 3, 30, tzinfo=dt_timezone.utc)
+        own = CashTransaction.objects.create(
+            portfolio=self.portfolio,
+            transaction_type=CashTransaction.TransactionType.DEPOSIT,
+            amount=Decimal("10.00"), balance_after=Decimal("20010.00"),
+        )
+        CashTransaction.objects.filter(pk=own.pk).update(created_at=at)
+        later = CashTransaction.objects.create(
+            portfolio=self.portfolio,
+            transaction_type=CashTransaction.TransactionType.WITHDRAWAL,
+            amount=Decimal("-5.00"), balance_after=Decimal("20005.00"),
+        )
+        CashTransaction.objects.filter(pk=later.pk).update(
+            created_at=at + timedelta(days=1)
+        )
+
+        response = self.client.get(reverse("trading:account-history"), {
+            "event_type": "DEPOSIT", "start_date": "2026-10-29", "end_date": "2026-10-29",
+        })
+        self.assertEqual(response.context["history_page"].paginator.count, 1)
+        self.assertContains(response, "Filters active")
+        self.assertContains(response, "Deposit")
+        self.assertEqual(
+            response.context["history_page"].object_list[0]["event_type"],
+            CashTransaction.TransactionType.DEPOSIT,
+        )
+        self.assertContains(response, "Oct 29, 2026")
+        self.assertContains(response, "11:30")
+
+    def test_history_invalid_date_range_is_reported(self):
+        response = self.client.get(reverse("trading:account-history"), {
+            "start_date": "2026-10-31", "end_date": "2026-10-30",
+        })
+        self.assertContains(response, "Start date must be on or before end date.")
+        self.assertEqual(response.context["filter_error"], "Start date must be on or before end date.")
+        self.assertContains(response, "Your submitted filters were not applied.")
+        self.assertNotContains(response, "No activity matches these filters")
+
+    def test_history_pagination_retains_active_filters(self):
+        for index in range(26):
+            entry = CashTransaction.objects.create(
+                portfolio=self.portfolio,
+                transaction_type=CashTransaction.TransactionType.DEPOSIT,
+                amount=Decimal("1.00"),
+                balance_after=Decimal("20000.00"),
+                description=f"Filtered deposit {index}",
+            )
+            CashTransaction.objects.filter(pk=entry.pk).update(
+                created_at=datetime(2026, 10, 29, 16, tzinfo=dt_timezone.utc)
+            )
+        response = self.client.get(reverse("trading:account-history"), {
+            "event_type": "DEPOSIT", "start_date": "2026-10-29", "end_date": "2026-10-29",
+        })
+        self.assertTrue(response.context["history_page"].has_next())
+        self.assertContains(response, "event_type=DEPOSIT&amp;start_date=2026-10-29&amp;end_date=2026-10-29&amp;page=2")
+
+    def test_history_labels_both_sides_of_eastern_dst_fall_back(self):
+        for timestamp, description in (
+            (datetime(2026, 11, 1, 5, 30, tzinfo=dt_timezone.utc), "Before fallback"),
+            (datetime(2026, 11, 1, 6, 30, tzinfo=dt_timezone.utc), "After fallback"),
+        ):
+            entry = CashTransaction.objects.create(
+                portfolio=self.portfolio,
+                transaction_type=CashTransaction.TransactionType.DEPOSIT,
+                amount=Decimal("1.00"), balance_after=Decimal("20000.00"),
+                description=description,
+            )
+            CashTransaction.objects.filter(pk=entry.pk).update(created_at=timestamp)
+        response = self.client.get(reverse("trading:account-history"), {
+            "start_date": "2026-11-01", "end_date": "2026-11-01",
+        })
+        self.assertContains(response, "1:30 a.m. EST")
+        self.assertContains(response, "1:30 a.m. EDT")
+
     def test_empty_history_and_missing_portfolio_states_are_distinct(self):
         empty = self.client.get(reverse("trading:account-history"))
         self.assertContains(empty, "No account activity yet")
@@ -242,6 +356,13 @@ class PortfolioAndHistoryViewTests(TestCase):
         missing = self.client.get(reverse("trading:account-history"))
         self.assertContains(missing, "No simulated portfolio is linked")
         self.assertFalse(missing.context["has_portfolio"])
+
+    def test_filtered_history_has_a_clear_no_match_state(self):
+        response = self.client.get(
+            reverse("trading:account-history"),
+            {"event_type": "SALE"},
+        )
+        self.assertContains(response, "No activity matches these filters")
 
     def test_get_requests_do_not_change_account_or_market_data(self):
         Holding.objects.create(
