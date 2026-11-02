@@ -1,6 +1,6 @@
 """Buy-order processing for the simulated trading system."""
 
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 
 from django.db import transaction
 from django.db.models import F
@@ -15,6 +15,33 @@ from .models import CashTransaction, Holding, Order, Portfolio
 
 MAX_QUANTITY = 2_147_483_647
 
+CENT = Decimal("0.01")
+
+
+def _add_purchase_basis(holding, purchase_cost):
+    """Update basis before increasing the holding quantity."""
+    if holding.quantity == 0:
+        holding.cost_basis = purchase_cost
+    elif holding.cost_basis is not None:
+        holding.cost_basis += purchase_cost
+
+
+def _remove_sale_basis(holding, sold_quantity):
+    """Remove and return sale basis before decreasing holding quantity."""
+    if holding.cost_basis is None:
+        if sold_quantity == holding.quantity:
+            holding.cost_basis = Decimal("0.00")
+        return None
+
+    if sold_quantity == holding.quantity:
+        sold_basis = holding.cost_basis
+    else:
+        sold_basis = (
+            holding.cost_basis * sold_quantity / holding.quantity
+        ).quantize(CENT, rounding=ROUND_HALF_UP)
+
+    holding.cost_basis -= sold_basis
+    return sold_basis
 
 class BuyOrderError(Exception):
     """A rejected buy request with a user-facing explanation."""
@@ -124,8 +151,11 @@ def place_buy_order(user, stock_id, quantity):
                 "This purchase would exceed the supported holding quantity."
             )
 
+        _add_purchase_basis(holding, cost)
         holding.quantity += quantity
-        holding.save(update_fields=["quantity", "updated_at"])
+        holding.save(
+            update_fields=["quantity", "cost_basis", "updated_at"]
+        )
 
         portfolio.refresh_from_db(
             fields=["cash_balance", "reserved_cash"]
@@ -217,6 +247,8 @@ def place_sell_order(user, stock_id, quantity):
     )
 
     if market_open:
+        order.cost_basis_sold = _remove_sale_basis(holding, quantity)
+        order.save(update_fields=["cost_basis_sold", "updated_at"])
         holding.quantity -= quantity
         portfolio.cash_balance += proceeds
         portfolio.save(
@@ -238,6 +270,7 @@ def place_sell_order(user, stock_id, quantity):
         update_fields=[
             "quantity",
             "reserved_quantity",
+            "cost_basis",
             "updated_at",
         ]
     )
@@ -398,10 +431,14 @@ def process_pending_orders(user, *, at=None, schedule=None):
 
             portfolio.reserved_cash -= order.reserved_cash
             portfolio.cash_balance -= total
+            _add_purchase_basis(holding, total)
             holding.quantity += order.quantity
             transaction_type = CashTransaction.TransactionType.PURCHASE
             amount = -total
         else:
+            order.cost_basis_sold = _remove_sale_basis(
+                holding, order.quantity
+            )
             holding.reserved_quantity -= order.reserved_shares
             holding.quantity -= order.quantity
             portfolio.cash_balance += total
@@ -419,6 +456,7 @@ def process_pending_orders(user, *, at=None, schedule=None):
             update_fields=[
                 "quantity",
                 "reserved_quantity",
+                "cost_basis",
                 "updated_at",
             ]
         )
@@ -433,6 +471,7 @@ def process_pending_orders(user, *, at=None, schedule=None):
                 "status",
                 "execution_price",
                 "executed_at",
+                "cost_basis_sold",
                 "reserved_cash",
                 "reserved_shares",
                 "updated_at",

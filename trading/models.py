@@ -59,6 +59,14 @@ class Holding(models.Model):
     )
     quantity = models.PositiveIntegerField(default=0)
     reserved_quantity = models.PositiveIntegerField(default=0)
+    cost_basis = models.DecimalField(
+        max_digits=22,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal("0.00"))],
+        help_text="Total acquisition cost of remaining shares; null if unknown.",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -122,6 +130,14 @@ class Order(models.Model):
         null=True,
         blank=True,
         validators=[MinValueValidator(Decimal('0.01'))],
+    )
+    cost_basis_sold = models.DecimalField(
+        max_digits=22,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal("0.00"))],
+        help_text="Acquisition cost allocated to an executed sale; null if unknown.",
     )
     executed_at = models.DateTimeField(null=True, blank=True)
     cancelled_at = models.DateTimeField(null=True, blank=True)

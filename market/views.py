@@ -1,7 +1,12 @@
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import Q
 from django.views.generic import DetailView, ListView
+from django.contrib.auth.decorators import login_required
+from django.http import JsonResponse
+from django.shortcuts import get_object_or_404
+from django.views.decorators.http import require_GET
 
+from .queries import get_stock_price_history
 from trading.forms import BuyOrderForm
 from trading.models import Holding, Portfolio
 
@@ -56,3 +61,14 @@ class StockDetailView(LoginRequiredMixin, DetailView):
                 else 0
             )
         return context
+
+@login_required
+@require_GET
+def stock_price_history(request, pk):
+    stock = get_object_or_404(
+        Stock.objects.filter(is_active=True),
+        pk=pk,
+    )
+    response = JsonResponse(get_stock_price_history(stock))
+    response["Cache-Control"] = "no-store"
+    return response
