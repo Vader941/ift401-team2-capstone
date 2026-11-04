@@ -49,6 +49,22 @@
                     <span class="small text-secondary">Cash balance plus current holdings</span>
                 </article>
             </div>
+            <div class="col-sm-6 col-lg-4">
+                <article class="hero-stat-card h-100">
+                    <span class="hero-stat-label">Overall investment gain/loss</span>
+                    {% if summary.overall_gain_loss is not None %}
+                        <strong class="h3 mb-0 {% if summary.overall_gain_loss < 0 %}text-danger{% else %}text-success{% endif %}">
+                            {% if summary.overall_gain_loss < 0 %}&minus;${{ summary.overall_gain_loss|floatformat:"2g"|slice:"1:" }}{% else %}+${{ summary.overall_gain_loss|floatformat:"2g" }}{% endif %}
+                        </strong>
+                        <span class="small text-secondary">Realized plus unrealized gain/loss; deposits and withdrawals excluded</span>
+                    {% else %}
+                        <strong class="h3 mb-0">Unavailable</strong>
+                        <span class="small text-secondary">
+                            {% if summary.has_unknown_cost_basis %}One or more open positions have unknown acquisition basis.{% elif summary.has_unknown_realized_basis %}One or more executed sales have unknown allocated basis.{% else %}Investment performance is unavailable for this account.{% endif %}
+                        </span>
+                    {% endif %}
+                </article>
+            </div>
         </div>
     </section>
 
@@ -73,7 +89,10 @@
                                 <th scope="col" class="text-end">Reserved</th>
                                 <th scope="col" class="text-end">Available</th>
                                 <th scope="col" class="text-end">Current price</th>
+                                <th scope="col" class="text-end">Average cost</th>
                                 <th scope="col" class="text-end">Position value</th>
+                                <th scope="col" class="text-end">Unrealized gain/loss</th>
+                                <th scope="col" class="text-end">Unrealized return</th>
                                 <th scope="col" class="text-end"><span class="visually-hidden">Actions</span></th>
                             </tr>
                         </thead>
@@ -92,7 +111,20 @@
                                     <td class="text-end">{{ holding.reserved_quantity }}</td>
                                     <td class="text-end">{{ holding.available_quantity }}</td>
                                     <td class="text-end text-nowrap">${{ holding.current_price|floatformat:"2g" }}</td>
+                                    <td class="text-end text-nowrap">
+                                        {% if holding.average_cost is not None %}${{ holding.average_cost|floatformat:"2g" }}{% else %}<span class="text-secondary">Basis unavailable</span>{% endif %}
+                                    </td>
                                     <td class="text-end text-nowrap">${{ holding.position_value|floatformat:"2g" }}</td>
+                                    <td class="text-end text-nowrap">
+                                        {% if holding.unrealized_gain_loss is not None %}
+                                            <span class="{% if holding.unrealized_gain_loss < 0 %}text-danger{% else %}text-success{% endif %}">{% if holding.unrealized_gain_loss < 0 %}Loss &minus;${{ holding.unrealized_gain_loss|floatformat:"2g"|slice:"1:" }}{% else %}Gain +${{ holding.unrealized_gain_loss|floatformat:"2g" }}{% endif %}</span>
+                                        {% else %}<span class="text-secondary">Unavailable</span>{% endif %}
+                                    </td>
+                                    <td class="text-end text-nowrap">
+                                        {% if holding.unrealized_gain_loss_percent is not None %}
+                                            <span class="{% if holding.unrealized_gain_loss_percent < 0 %}text-danger{% else %}text-success{% endif %}">{% if holding.unrealized_gain_loss_percent < 0 %}Loss {{ holding.unrealized_gain_loss_percent|floatformat:"2g" }}%{% else %}Gain +{{ holding.unrealized_gain_loss_percent|floatformat:"2g" }}%{% endif %}</span>
+                                        {% else %}<span class="text-secondary">Unavailable</span>{% endif %}
+                                    </td>
                                     <td class="text-end">
                                         {% if holding.is_active and holding.available_quantity > 0 %}
                                             <a class="btn btn-outline-primary btn-sm" href="{% url 'trading:sell' holding.stock_id %}">Sell</a>

@@ -3,6 +3,8 @@ from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_http_methods
+from django.utils import timezone
+from zoneinfo import ZoneInfo
 
 from trading.models import Portfolio
 
@@ -48,6 +50,13 @@ def _get_own_portfolio(request):
 
 
 def _cash_context(portfolio, form, operation):
+    recent_transactions = list(
+        portfolio.cash_transactions.all()[:RECENT_TRANSACTION_COUNT]
+    )
+    eastern = ZoneInfo("America/New_York")
+    for entry in recent_transactions:
+        entry.local_created_at = timezone.localtime(entry.created_at, eastern)
+        entry.timezone_abbr = entry.local_created_at.tzname()
     return {
         "form": form,
         "operation": operation,
@@ -55,7 +64,8 @@ def _cash_context(portfolio, form, operation):
         "cash_balance": portfolio.cash_balance,
         "reserved_cash": portfolio.reserved_cash,
         "available_cash": available_cash(portfolio),
-        "recent_transactions": portfolio.cash_transactions.all()[:RECENT_TRANSACTION_COUNT],
+        "recent_transactions": recent_transactions,
+        "event_timezone_label": "Eastern Time (ET)",
     }
 
 
@@ -92,9 +102,12 @@ def deposit(request):
         form = DepositForm()
 
     portfolio.refresh_from_db()
-    return render(
-        request, "accounts/cash_operation.html", _cash_context(portfolio, form, "deposit")
-    )
+    with timezone.override(ZoneInfo("America/New_York")):
+        return render(
+            request,
+            "accounts/cash_operation.html",
+            _cash_context(portfolio, form, "deposit"),
+        )
 
 
 @login_required
@@ -122,6 +135,9 @@ def withdraw(request):
         form = WithdrawalForm(portfolio=portfolio)
 
     portfolio.refresh_from_db()
-    return render(
-        request, "accounts/cash_operation.html", _cash_context(portfolio, form, "withdraw")
-    )
+    with timezone.override(ZoneInfo("America/New_York")):
+        return render(
+            request,
+            "accounts/cash_operation.html",
+            _cash_context(portfolio, form, "withdraw"),
+        )
