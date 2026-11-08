@@ -6,7 +6,7 @@ Contracts: docs/portfolio-history.md and trading/queries.py, including
 the performance/filter backend in PR #25 and frontend integration in PR #26.
 Baseline reconciliation coverage: trading/test_reconciliation.py (22 tests).
 Additional coverage: trading/test_cost_basis.py, trading/test_queries.py,
-trading/test_portfolio_history_views.py, and market/test_price_history_queries.py..
+trading/test_portfolio_history_views.py, and market/test_price_history_queries.py.
 
 ## Result summary
 

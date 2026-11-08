@@ -89,7 +89,8 @@ MarketException supplies date-specific closures or hours.
 | submission_price | money | ≥ 0.01 |
 | reserved_cash | money | pending buys only; 0 after execution or cancel |
 | reserved_shares | integer | pending sells only; 0 after execution or cancel |
-| execution_price, executed_at | cost_basis_sold | decimal(22, 2), nullable | acquisition cost allocated to an executed sale; NULL when unknown or not applicable |
+| execution_price, executed_at | nullable | set when executed |
+| cost_basis_sold | decimal(22, 2), nullable | acquisition cost allocated to an executed sale; NULL when unknown or not applicable |
 | cancelled_at, cancellation_reason | nullable / text | set when cancelled |
 | created_at, updated_at | datetime | |
 
