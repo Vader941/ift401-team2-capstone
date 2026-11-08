@@ -33,11 +33,11 @@
                 <dd>${{ stats.current_price|default:stock.current_price|floatformat:"2g" }}</dd>
             </div>
             <div>
-                <dt>Price Change</dt>
+                <dt>Change Since Open</dt>
                 <dd>{% if stats.price_change < 0 %}-{% else %}+{% endif %}${{ stats.price_change|floatformat:"2g"|cut:"-" }}</dd>
             </div>
             <div>
-                <dt>Change Percent</dt>
+                <dt>Change since open (%)</dt>
                 <dd>{% if stats.price_change_percent >= 0 %}+{% endif %}{{ stats.price_change_percent|floatformat:"2g" }}%</dd>
             </div>
             <div>
@@ -86,11 +86,16 @@
                 </div>
                 <p class="small text-secondary mt-2 mb-0">This chart shows stored simulated observations. Refresh checks for recorded data and does not generate prices.</p>
                 <div class="table-responsive mt-3">
-                    <table class="table table-sm mb-0">
-                        <caption class="visually-hidden">Recorded {{ stock.symbol }} prices with Eastern observation times</caption>
-                        <thead><tr><th scope="col">Observed (ET)</th><th scope="col" class="text-end">Price (USD)</th></tr></thead>
-                        <tbody id="price-history-table-body"><tr><td colspan="2">Loading observations…</td></tr></tbody>
-                    </table>
+                    <details class="mt-3">
+                        <summary class="fw-semibold">View latest recorded prices</summary>
+                        <div class="table-responsive mt-2">
+                            <table class="table table-sm mb-0">
+                                <caption class="visually-hidden">Recorded {{ stock.symbol }} prices with Eastern observation times</caption>
+                                <thead><tr><th scope="col">Observed (ET)</th><th scope="col" class="text-end">Price (USD)</th></tr></thead>
+                                <tbody id="price-history-table-body"><tr><td colspan="2">Loading observations…</td></tr></tbody>
+                            </table>
+                        </div>
+                    </details>
                 </div>
             </div>
         </section>

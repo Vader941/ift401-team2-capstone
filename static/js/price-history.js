@@ -14,7 +14,11 @@
         year: "numeric", hour: "numeric", minute: "2-digit", timeZoneName: "short"
     });
     const dateFormatter = new Intl.DateTimeFormat("en-US", {
-        timeZone: "America/New_York", month: "short", day: "numeric"
+        timeZone: "America/New_York",
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit"
     });
     const moneyFormatter = new Intl.NumberFormat("en-US", {
         minimumFractionDigits: 2, maximumFractionDigits: 2
@@ -64,10 +68,23 @@
                 class: "chart-point"
             }));
         }
-        const tickCount = Math.min(3, points.length);
+        const tickCount = first === last ? 1 : 3;
         for (let i = 0; i < tickCount; i++) {
-            const point = points[Math.round(i * (points.length - 1) / Math.max(tickCount - 1, 1))];
-            svg.append(node("text", { x: x(Date.parse(point.timestamp)), y: H - bottom + 22, "text-anchor": "middle", class: "chart-axis-label" }, dateFormatter.format(new Date(point.timestamp))));
+            const timestamp = tickCount === 1
+                ? first
+                : first + (last - first) * i / (tickCount - 1);
+            const anchor = tickCount === 1
+                ? "middle"
+                : i === 0 ? "start"
+                : i === tickCount - 1 ? "end"
+                : "middle";
+
+            svg.append(node("text", {
+                x: x(timestamp),
+                y: H - bottom + 22,
+                "text-anchor": anchor,
+                class: "chart-axis-label"
+            }, dateFormatter.format(new Date(timestamp))));
         }
     }
 
