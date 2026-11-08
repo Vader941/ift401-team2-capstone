@@ -1,8 +1,12 @@
 # Data Reconciliation and Verification Report
 
-Owner: Steeve Tankeu. Round: October 24–30, 2026.
-Contract verified: `docs/portfolio-history.md` and `trading/queries.py` (PR #21).
-Tests: `trading/test_reconciliation.py` (22 tests).
+Original verification: Steeve Tankeu, October 24–30, 2026.
+Final-build documentation update: Nathan Able, November 8, 2026.
+Contracts: docs/portfolio-history.md and trading/queries.py, including
+the performance/filter backend in PR #25 and frontend integration in PR #26.
+Baseline reconciliation coverage: trading/test_reconciliation.py (22 tests).
+Additional coverage: trading/test_cost_basis.py, trading/test_queries.py,
+trading/test_portfolio_history_views.py, and market/test_price_history_queries.py..
 
 ## Result summary
 
@@ -11,10 +15,11 @@ Tests: `trading/test_reconciliation.py` (22 tests).
 | Cash, share, and reservation scenarios | SQLite (local) | Pass, 22/22 |
 | Full suite on PR #21 | SQLite | Pass, 236 tests |
 | Full suite on PR #21 + PR #22 (market schedule) | SQLite | Pass, 263 tests |
-| Competing requests, double execution, cancel/execute races | MySQL (hosted) | **Not yet performed.** Pair with Nathan |
+| Separate concurrency/overnight campaign | MySQL (hosted) | Removed from final scope; not performed or claimed as passed |
 
-No implementation defects were found in the local scenarios. SQLite results
-do not prove MySQL row-lock behavior. See "Remaining hosted checks".
+The original local scenarios found no implementation defects. Later
+verification is recorded below. SQLite results do not establish MySQL
+row-lock behavior.
 
 ## Contract review (PR #21)
 
@@ -118,21 +123,67 @@ buys, sales, and pending execution (`test_buy_orders`, `test_sell_orders`,
 `test_pending_orders`); repricing that protects other orders' reserved
 cash (`test_pending_orders`); history tie ordering (`test_queries`).
 
-## Remaining hosted checks (MySQL, with Nathan)
+## Final-build verification
 
-These need the real MySQL database, because SQLite does not test row locks:
+### Independent backend review
 
-1. Two near-simultaneous withdrawals that together exceed available cash.
-   Expected: one succeeds, one is rejected, and the balance stays non-negative.
-2. A cancel request racing the worker executing the same pending order.
-   Expected: exactly one outcome, either executed or cancelled, never both.
-3. The worker and a customer buy touching the same stock and portfolio.
-   Expected: no deadlock error, and the ledger reconciles afterward.
-4. Run the reconciliation rules against the dedicated hosted test accounts
-   after a few worker cycles.
+On October 30, Steeve reported that all 305 tests passed on PR #25.
+He independently checked cost-basis rounding, full position closure to
+exactly zero, repeatable backfill results, and unknown basis for
+admin-created holdings.
 
-Record for each: date, database, commit, accounts used (no credentials),
-expected vs. actual. Do not use or clear the demo accounts.
+He agreed with overall gain = realized + unrealized and reported that
+his checked scenarios matched total account value minus net funding.
+
+Historical sales whose acquisition basis cannot be reconstructed keep
+realized and overall gain unavailable. Check presentation accounts after
+migration; use a freshly registered demo account if its history is incomplete.
+
+### Integrated build
+
+PR #26 reported 314 passing local tests after integration with PR #25.
+The merged build's November 4 automated test-and-deploy workflow succeeded,
+including hosted migrations, static-file collection, application reload,
+and a homepage response check.
+
+### Hosted customer walkthrough on November 4
+
+The walkthrough verified:
+
+- A new account displayed $25,000 starting simulated cash.
+- A $500 deposit and $200 withdrawal produced $25,300 cash.
+- An overdraft request was rejected without changing cash.
+- Stock search returned the selected company.
+- A closed-market buy of 10 ABLE at $20.03 reserved $200.30.
+- Total account value remained $25,300 while the order was pending.
+- Cancellation released the reservation and added one cancellation event.
+- Activity type/date filters, Reset, empty results, and reversed-range
+  validation behaved correctly.
+- Chart history loaded 180 observations. Repeated Refresh reported no new
+  observations and retained the last recorded As of time.
+- Observed activity and pending-order timestamps displayed EST labels.
+
+The account ended with $25,300 available cash, no holdings, no pending
+orders, and zero investment gain.
+
+### Remaining functional walkthrough
+
+The following were not exercised in that hosted session:
+
+- Executed purchases and sales with populated portfolio performance.
+- Pending sales and their cancellation.
+- Filtered pagination with sufficient history.
+- A newly generated observation appearing through chart Refresh.
+- Administrator functions.
+
+Verify these during the final team walkthrough and record actual outcomes.
+
+### Scope adjustment
+
+The separate coordinated concurrency and overnight testing campaign was
+removed from final scope in favor of the required functional walkthrough
+and presentation rehearsal. It is not a release blocker and is not
+reported as passed. Existing automated regression coverage remains.
 
 ## Notes
 

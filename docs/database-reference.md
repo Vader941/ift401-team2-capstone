@@ -1,8 +1,11 @@
 # Database Reference
 
-Actual schema as of PR #21 (main + portfolio/history helpers). Money fields
-are `Decimal(12, 2)`. All tables have an auto `id` primary key.
-Customer accounts use Django's built-in `auth.User`.
+Schema includes the market schedule from PR #22 and cost-basis fields from
+PR #25; frontend integration was completed in PR #26. Fields marked money
+use Decimal(12, 2). Cost-basis fields use Decimal(22, 2).
+Tables use an automatic id primary key except MarketSchedule, whose
+primary key is fixed at 1.
+Customer accounts use Django's built-in auth.User.
 
 ## Market
 
@@ -43,8 +46,17 @@ Derived (not stored): market capitalization = share_volume × current_price.
 | is_closed | bool | closed: no hours. Open: closes_at > opens_at |
 | opens_at, closes_at | time, nullable | |
 
-A configurable regular market schedule model is proposed in PR #22. This
-reference will be updated when it merges.
+**MarketSchedule**: one regular schedule for the simulated market
+| Field | Type | Notes |
+|---|---|---|
+| id | positive small integer, primary key | fixed at 1; database constraint permits only one schedule |
+| opening_time | time | default 09:30 |
+| closing_time | time | default 16:00; must be later than opening_time on the same day |
+| timezone_name | text(100) | default America/New_York; validated as an IANA timezone |
+| monday through friday | boolean | default True; at least one must be enabled |
+| updated_at | datetime | automatically updated |
+
+MarketException supplies date-specific closures or hours.
 
 ## Trading
 
@@ -63,6 +75,7 @@ reference will be updated when it merges.
 | stock | → Stock | PROTECT |
 | quantity | integer ≥ 0 | total shares owned |
 | reserved_quantity | integer ≥ 0 | ≤ quantity, held for pending sells |
+| cost_basis | decimal(22, 2), nullable | total acquisition cost of remaining shares; NULL means unknown |
 | created_at, updated_at | datetime | |
 
 **Order**
@@ -76,7 +89,7 @@ reference will be updated when it merges.
 | submission_price | money | ≥ 0.01 |
 | reserved_cash | money | pending buys only; 0 after execution or cancel |
 | reserved_shares | integer | pending sells only; 0 after execution or cancel |
-| execution_price, executed_at | nullable | set when executed |
+| execution_price, executed_at | cost_basis_sold | decimal(22, 2), nullable | acquisition cost allocated to an executed sale; NULL when unknown or not applicable |
 | cancelled_at, cancellation_reason | nullable / text | set when cancelled |
 | created_at, updated_at | datetime | |
 
@@ -100,6 +113,7 @@ User 1──1 Portfolio 1──* Holding *──1 Stock
 Stock 1──* PriceHistory
 Stock 1──* StockDailyStatistic
 MarketException (stand-alone)
+MarketSchedule (stand-alone singleton)
 ```
 
 ## Reconciliation rules
@@ -109,3 +123,10 @@ MarketException (stand-alone)
 - Holding.quantity = executed BUY quantity − executed SELL quantity
 - Holding.reserved_quantity = sum of reserved_shares on PENDING SELL orders
 - each EXECUTED order has exactly one CashTransaction; others have none
+- Holding average cost = cost_basis / quantity for positive-quantity holdings with known basis
+- Executed buys add acquisition cost; pending reservations do not change basis
+- Partial sales allocate basis proportionally, rounded to cents using ROUND_HALF_UP
+- Final sales remove the remaining basis, leaving zero
+- Realized gain = executed sale proceeds − cost_basis_sold
+- Unrealized gain = current holdings value − remaining known basis
+- Overall gain = realized + unrealized; incomplete basis makes the affected totals unavailable
