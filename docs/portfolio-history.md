@@ -279,8 +279,8 @@ Suggested browser query:
 
 Pagination links must preserve event_type, start_date, and end_date.
 Applying changed filters should reset page to 1.
-History-view wiring, filter controls, validation display, and pagination
-link changes remain frontend integration work.
+PR #26 integrated the history view, filter controls, validation messages,
+empty-result states, and pagination links that preserve selected filters.
 
 ## Read-only stock graph endpoint
 
@@ -331,7 +331,9 @@ An empty history returns points=[] and null for last_observed_price,
 data_as_of, and display_data_as_of. Do not invent a point from current price.
 The graph's last observed price may differ from the stock's current price.
 
-Frontend chart rendering and Refresh behavior remain integration work.
+PR #26 integrated chart rendering, asynchronous Refresh, loading/error
+feedback, and the recorded-price table. Refresh uses the latest stored
+observation time for the As of label.
 
 ## Added verification coverage
 
@@ -343,8 +345,24 @@ market/test_price_history_queries.py covers chronological selection, stock
 isolation, timestamps, empty history, endpoint access, and read-only behavior.
 
 The local full suite passed 305 tests on October 29, 2026.
-Hosted MySQL, deployed frontend integration, and broader customer time-display
-verification remain pending.
+PR #26 reported 314 passing local tests after integration with PR #25.
+The merged build's automated test-and-deploy workflow succeeded on
+November 4, 2026.
+
+A hosted customer walkthrough on November 4 verified simulated deposits,
+withdrawals, overdraft rejection, stock search, pending-buy reservations,
+cancellation and reservation release, activity type/date filters, invalid
+date-range feedback, empty results, and chart loading/unchanged-data Refresh.
+Displayed activity and pending-order timestamps used EST labels.
+
+Executed buys/sales, populated holding-performance displays, filtered
+pagination, new observations arriving during Refresh, and administrator
+functions were not exercised in that walkthrough. These remain targets
+for the final hosted walkthrough.
+
+The separate concurrency/overnight testing campaign was removed from the
+final scope. No claim of hosted concurrency verification is made.
+
 ### Implementation and scope
 
 The helper combines the account's cash transactions and cancelled orders
